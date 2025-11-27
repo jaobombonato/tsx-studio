@@ -1,5 +1,9 @@
-// Compila código TSX usando Babel Standalone
 window.compileTSX = function (code) {
+
+    if (typeof Babel === "undefined") {
+        console.error("Babel não carregou ainda");
+        return;
+    }
 
     try {
         const result = Babel.transform(code, {
@@ -14,7 +18,6 @@ window.compileTSX = function (code) {
 
     } catch (err) {
         alert("Erro ao compilar TSX: " + err.message);
-        console.error(err);
         return null;
     }
 };
