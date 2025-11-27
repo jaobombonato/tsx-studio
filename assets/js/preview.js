@@ -7,6 +7,9 @@ window.renderPreview = function (compiledCode) {
         <body>
             <div id="root"></div>
 
+            <!-- Carrega Babel dentro do IFRAME -->
+            <script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+
             <script type="module">
                 import React from "https://esm.sh/react@18";
                 import ReactDOM from "https://esm.sh/react-dom@18";
