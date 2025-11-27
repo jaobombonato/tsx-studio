@@ -17,21 +17,20 @@ window.renderPreview = function (tsxCode) {
             const compiled = Babel.transform(\`${tsxCode}\`, {
                 presets: [
                     ["typescript", { allExtensions: true, isTSX: true }],
-                    ["react", { runtime: "classic" }] // ← SOLUÇÃO
-                ]
+                    ["react", { runtime: "classic" }]
+                ],
+                plugins: ["transform-modules-commonjs"]  // ← ESSENCIAL!
             }).code;
 
-            // Executa o JS compilado
-            const App = (function(){
-                try {
-                    let exports = {};
-                    eval(compiled);
-                    return exports.default || window.App;
-                } catch (err) {
-                    document.body.innerHTML = '<pre style="color:red;font-size:18px;">Erro no código: ' + err.message + '</pre>';
-                    throw err;
-                }
-            })();
+            let exports = {};
+            try {
+                eval(compiled);
+            } catch (err) {
+                document.body.innerHTML = '<pre style="color:red;font-size:18px;">Erro no código: ' + err.message + '</pre>';
+                throw err;
+            }
+
+            const App = exports.default;
 
             ReactDOM.createRoot(document.getElementById("root"))
                 .render(React.createElement(App));
