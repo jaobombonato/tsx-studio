@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>TSX Studio – Editor</title>
+    <link rel="stylesheet" href="/assets/css/base.css" />
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- Editor -->
+        <div id="editorContainer"></div>
+
+        <!-- Preview -->
+        <div id="previewContainer">
+            <iframe id="previewFrame" sandbox="allow-scripts"></iframe>
+        </div>
+    </div>
+
+    <!-- Botões -->
+    <div id="controls">
+        <button id="runBtn">Rodar</button>
+    </div>
+
+    <!-- RequireJS + Monaco -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Scripts internos -->
+    <script src="/assets/js/monaco-loader.js"></script>
+    <script src="/assets/js/compiler.js"></script>
+    <script src="/assets/js/preview.js"></script>
+
+    <!-- Lógica do botão -->
+    <script>
+        document.getElementById("runBtn").onclick = () => {
+            const code = window.editor.getValue();
+            const compiled = window.compileTSX(code);
+            if (!compiled) return;
+            window.renderPreview(compiled);
+        };
+    </script>
+
+</body>
+</html>
