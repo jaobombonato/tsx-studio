@@ -1,5 +1,3 @@
-/*
-  preview-esbuild.js — versão compatível
 */
 
 const ESBUILD_VERSION = '0.17.19';
