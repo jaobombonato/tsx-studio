@@ -24,7 +24,7 @@ window.MonacoEnvironment = {
 require.config({
   waitSeconds: 20, // evita timeout em 3G/WebView/Safari
   paths: {
-    vs: "/monaco/min/vs"
+    vs: "/js/monaco/min/vs"
   }
 });
 
