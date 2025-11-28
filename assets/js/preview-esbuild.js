@@ -230,17 +230,29 @@ function parseMultiFile(text) {
 /* -------------------------------------------
    8) HTML WEB
 ------------------------------------------- */
-function htmlForWeb(bundle) {
+function htmlForWeb(bundleUrl) {
   return `
   <html>
-    <head><meta charset="utf-8"/></head>
+    <head>
+      <meta charset="utf-8"/>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css">
+    </head>
     <body style="margin:0">
       <div id="root"></div>
       <script type="module">
-        const React = (await import("https://esm.sh/react")).default;
-        const ReactDOM = (await import("https://esm.sh/react-dom/client")).default;
-        const App = (await import("${bundle}")).default;
-        ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+        try {
+          const reactMod = await import("https://esm.sh/react@18.2.0");
+          const React = reactMod.default || reactMod;
+          const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
+          const ReactDOMClient = domMod.default || domMod;
+          const App = (await import("${bundleUrl}")).default;
+          ReactDOMClient.createRoot(document.getElementById("root")).render(
+            React.createElement(App)
+          );
+        } catch (err) {
+          document.body.innerHTML = '<pre style="color:red;padding:20px;">' + err + '</pre>';
+          console.error(err);
+        }
       <\/script>
     </body>
   </html>`;
@@ -249,16 +261,32 @@ function htmlForWeb(bundle) {
 /* -------------------------------------------
    9) HTML RN-FAKE
 ------------------------------------------- */
-function htmlForRN(bundle) {
+function htmlForRN(bundleUrl) {
   return `
   <html>
-    <head><meta charset="utf-8"/></head>
+    <head>
+      <meta charset="utf-8"/>
+    </head>
     <body style="margin:0">
       <div id="root"></div>
       <script type="module">
-        const React = (await import("https://esm.sh/react")).default;
-        const App = (await import("${bundle}")).default;
-        document.getElementById("root").appendChild(App());
+        try {
+          const reactMod = await import("https://esm.sh/react@18.2.0");
+          const React = reactMod.default || reactMod;
+          const App = (await import("${bundleUrl}")).default;
+          const root = document.getElementById("root");
+          const element = App();
+          if (React.isValidElement(element)) {
+            root.appendChild(
+              document.createElement("div")
+            ).appendChild(document.createTextNode("React element returned; adjust RN shim if needed."));
+          } else {
+            root.appendChild(element);
+          }
+        } catch (err) {
+          document.body.innerHTML = '<pre style="color:red;padding:20px;">' + err + '</pre>';
+          console.error(err);
+        }
       <\/script>
     </body>
   </html>`;
