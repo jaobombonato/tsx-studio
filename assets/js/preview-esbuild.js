@@ -1,601 +1,192 @@
 /* ============================================================
-   TSX Studio Engine PRO — v1.5
-   Web + React Native Fake (Híbrido)
-   ESBuild + Babel fallback
-   ZIP + VFS + resolver npm pinado
-   Compatível com qualquer app grande de IA
+   TSX STUDIO — preview-esbuild.js (VERSÃO CORRIGIDA FINAL)
    ============================================================ */
 
-/* -------------------------------------------
-   0) CONFIG / GLOBALS
-------------------------------------------- */
-
-const ESBUILD_VERSION = "0.19.5";
-const ESBUILD_ESM = `https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esm/browser.js`;
-const ESBUILD_WASM = `https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm`;
-
-const httpCache = new Map();
-
-/* Fix de versões de pacotes problemáticos */
+/* ------------------------------------------------------------
+   1) Mapa fixo de versões (compatível com seu projeto offline)
+------------------------------------------------------------ */
 const FIXED_VERSIONS = {
-  "react": "react@18.2.0",
-  "react-dom": "react-dom@18.2.0",
-  "lucide-react": "lucide-react@0.368.0",
+  "react": "react@19.2.0",
+  "react-dom": "react-dom@19.2.0",
+  "lucide-react": "lucide-react@0.553.0",
   "react-hot-toast": "react-hot-toast@2.4.1",
   "zustand": "zustand@latest",
   "dayjs": "dayjs@latest",
   "clsx": "clsx@latest",
-  "uuid": "uuid@latest"
+  "uuid": "uuid@latest",
 };
 
-/* -------------------------------------------
-   1) LOAD ESBUILD (singleton)
-------------------------------------------- */
-
-async function loadEsbuild() {
-  if (window.__esbuild) return window.__esbuild;
-  const mod = await import(ESBUILD_ESM);
-  await mod.initialize({ wasmURL: ESBUILD_WASM });
-  window.__esbuild = mod;
-  return mod;
-}
-
-/* -------------------------------------------
-   2) HEURÍSTICA — RN FAKE x WEB
-------------------------------------------- */
-
-function shouldUseRNFake(code) {
-  const c = code.toLowerCase();
-
-  if (c.includes(`from "react-native"`) || c.includes(`from 'react-native'`))
-    return true;
-
-  if (
-    /<div\b/i.test(c) ||
-    /<section\b/i.test(c) ||
-    /<p\b/i.test(c) ||
-    /<h1\b/i.test(c) ||
-    /<span\b/i.test(c)
-  ) return false;
-
-  if (
-    /<view\b/i.test(c) ||
-    /<text\b/i.test(c) ||
-    /<scrollview\b/i.test(c) ||
-    /<flatlist\b/i.test(c)
-  ) return true;
-
-  if (/stylesheet\.create\s*\(/i.test(c)) return true;
-
-  return false;
-}
-
-/* -------------------------------------------
-   3) RN FAKE SHIM
-------------------------------------------- */
-
-const RN_SHIM = `
-  import React from "https://esm.sh/react@18.2.0";
-
-  export const View = (p={}) =>
-    React.createElement("div", { ...p, style: p.style }, p.children);
-
-  export const Text = (p={}) =>
-    React.createElement("span", { ...p, style: p.style }, p.children);
-
-  export const Image = (p={}) => {
-    let src = p.source?.uri || p.source || "";
-    return React.createElement("img", { src, style: p.style });
-  };
-
-  export const ScrollView = (p={}) =>
-    React.createElement("div", { style: { overflowY: "auto", ...p.style } }, p.children);
-
-  export const TouchableOpacity = (p={}) =>
-    React.createElement("button", { onClick: p.onPress, style: p.style }, p.children);
-
-  export const FlatList = (p={}) => {
-    const { data = [], renderItem } = p;
-    return React.createElement(
-      "div",
-      {},
-      data.map((item, i) => renderItem({ item, index: i }))
-    );
-  };
-
-  export const StyleSheet = { create: (o) => o };
-
-  export default {
-    View, Text, Image, ScrollView,
-    TouchableOpacity, FlatList, StyleSheet
-  };
-`;
-/* ============================================================
-   4) REWRITE DE IMPORTS (AUTO-FIX, VERSION PINNING)
-   ============================================================ */
-
-function rewriteBareImports(code) {
-  return code.replace(/from\s+['"]([^'"]+)['"]/g, (match, pkg) => {
-
-    /* 1) URLs absolutas ficam como estão */
-    if (pkg.startsWith("http")) return `from "${pkg}"`;
-
-    /* 2) VFS NÃO pode ser modificado */
-    if (pkg.startsWith("vfs:")) return `from "${pkg}"`;
-
-    /* 3) imports relativos NÃO são reescritos */
-    if (pkg.startsWith(".") || pkg.startsWith("/"))
-      return `from "${pkg}"`;
-
-    /* 4) alias "@/"" mantém */
-    if (pkg.startsWith("@/")) return `from "${pkg}"`;
-
-    /* 5) React Native — shim automático */
-    if (pkg === "react-native" || pkg.startsWith("react-native/"))
-      return `from "${pkg}"`;
-
-    /* 6) FIX AUTOMÁTICO DE VERSÃO — pacote mapeado */
+/* ------------------------------------------------------------
+   2) Resolver de imports — converte "react" → esm.sh
+------------------------------------------------------------ */
+function resolveBareImports(code) {
+  return code.replace(/from\s+["']([^"']+)["']/g, (m, pkg) => {
     if (FIXED_VERSIONS[pkg]) {
       return `from "https://esm.sh/${FIXED_VERSIONS[pkg]}"`;
     }
 
-    /* 7) fallback geral — usar @latest */
-    return `from "https://esm.sh/${pkg}@latest"`;
-  });
-}
-
-/* ============================================================
-   5) PLUGIN VFS + FETCH npm
-   ============================================================ */
-
-function makePlugin(files = {}) {
-  return {
-    name: "tsxstudio-vfs-pro",
-    setup(build) {
-
-      /* VFS → resolve */
-      build.onResolve({ filter: /^vfs:/ }, args => ({
-        path: args.path,
-        namespace: "vfs"
-      }));
-
-      /* VFS → load */
-      build.onLoad({ filter: /.*/, namespace: "vfs" }, args => {
-        const p = args.path.replace(/^vfs:\/*/, "");
-
-        /* shim react-native */
-        if (p === "react-native-shim.js") {
-          return { contents: RN_SHIM, loader: "js" };
-        }
-
-        if (files[p] !== undefined) {
-          const loader = p.endsWith(".tsx") || p.endsWith(".ts") ? "tsx"
-            : p.endsWith(".css") ? "css"
-            : "js";
-          return { contents: files[p], loader };
-        }
-
-        return null;
-      });
-
-      /* Bare imports → esm.sh */
-      build.onResolve({ filter: /^[^./].*/ }, args => {
-        if (args.path.startsWith("vfs:"))
-          return { path: args.path, namespace: "vfs" };
-
-        /* Se tiver versão fixa, aplica */
-        if (FIXED_VERSIONS[args.path]) {
-          return {
-            path: `https://esm.sh/${FIXED_VERSIONS[args.path]}`,
-            namespace: "http"
-          };
-        }
-
-        return {
-          path: `https://esm.sh/${args.path}@latest`,
-          namespace: "http"
-        };
-      });
-
-      /* HTTP loader (esm.sh) */
-      build.onLoad({ filter: /.*/, namespace: "http" }, async args => {
-        const url = args.path;
-
-        if (httpCache.has(url)) {
-          return {
-            contents: httpCache.get(url),
-            loader: guessLoader(url)
-          };
-        }
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Fetch falhou: " + url);
-
-        const text = await res.text();
-        httpCache.set(url, text);
-
-        return { contents: text, loader: guessLoader(url) };
-      });
-
+    if (pkg.startsWith(".") || pkg.startsWith("/") || pkg.startsWith("https://")) {
+      return `from "${pkg}"`;
     }
-  };
-}
 
-function guessLoader(url) {
-  if (url.endsWith(".css")) return "css";
-  if (url.endsWith(".ts") || url.endsWith(".tsx")) return "tsx";
-  return "js";
-}
-
-/* ============================================================
-   6) BABEL FALLBACK — SEMPRE DISPONÍVEL NO IFRAME
-   ============================================================ */
-
-async function ensureBabelInIframe(doc) {
-  return new Promise((resolve) => {
-    const script = doc.createElement("script");
-    script.src = "https://unpkg.com/@babel/standalone/babel.min.js";
-    script.onload = () => resolve(true);
-    doc.head.appendChild(script);
+    return `from "https://esm.sh/${pkg}"`;
   });
 }
 
-async function babelCompile(code) {
-  if (!window.Babel) {
-    await new Promise((resolve) => {
-      const s = document.createElement("script");
-      s.src = "https://unpkg.com/@babel/standalone/babel.min.js";
-      s.onload = resolve;
-      document.head.appendChild(s);
-    });
-  }
-
-  const result = Babel.transform(code, {
-    presets: [
-      ["typescript", { allExtensions: true, isTSX: true }],
-      ["react", { runtime: "automatic" }]
-    ]
-  });
-
-  return result.code;
-}
-/* ============================================================
-   7) MULTI-FILE PARSER (/// file:)
-   ============================================================ */
-function parseMultiFile(text) {
-  const parts = text.split(/(?=^\/\/\/\s*file:\s*)/m);
-  const files = {};
-
-  for (const p of parts) {
-    const m = p.match(/\/\/\/\s*file:\s*([^\r\n]+)/);
-    if (m) {
-      const path = m[1].trim().replace(/^\/+/, "");
-      const content = p.replace(m[0], "").replace(/^\n/, "");
-      files[path] = content;
-    }
-  }
-
-  if (Object.keys(files).length === 0) {
-    files["App.tsx"] = text;
-  }
-
-  return files;
-}
-
-/* ============================================================
-   8) HTML PARA WEB — React + ReactDOM + Babel no iframe
-   ============================================================ */
-function htmlForWeb(bundleUrl) {
-  return `
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
-    </head>
-
-    <body style="margin:0">
-      <div id="root"></div>
-
-      <script type="module">
-        (async () => {
-          try {
-            /* Babel dentro do iframe */
-            await import("https://unpkg.com/@babel/standalone/babel.min.js");
-
-            /* React e ReactDOM (fixado 18.2.0) */
-            const reactMod = await import("https://esm.sh/react@18.2.0");
-            const React = reactMod.default || reactMod;
-
-            const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
-            const ReactDOMClient = domMod.default || domMod;
-
-            window.React = React;
-            window.ReactDOMClient = ReactDOMClient;
-
-            /* Importar bundle */
-            const AppModule = await import("${bundleUrl}");
-            const App = AppModule.default || AppModule.App;
-
-            /* Executar */
-            ReactDOMClient.createRoot(document.getElementById("root"))
-              .render(React.createElement(App));
-
-          } catch (e) {
-            document.body.innerHTML =
-              '<pre style="color:red;padding:20px;">' + e + '</pre>';
-            console.error(e);
-          }
-        })();
-      <\/script>
-    </body>
-  </html>`;
-}
-
-/* ============================================================
-   9) HTML PARA RN-FAKE
-   ============================================================ */
-function htmlForRN(bundleUrl) {
-  return `
-  <html>
-    <head>
-      <meta charset="utf-8" />
-    </head>
-
-    <body style="margin:0">
-      <div id="root"></div>
-
-      <script type="module">
-        (async () => {
-          try {
-            await import("https://unpkg.com/@babel/standalone/babel.min.js");
-
-            const reactMod = await import("https://esm.sh/react@18.2.0");
-            const React = reactMod.default || reactMod;
-
-            const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
-            const ReactDOMClient = domMod.default || domMod;
-
-            window.React = React;
-            window.ReactDOMClient = ReactDOMClient;
-
-            const AppModule = await import("${bundleUrl}");
-            const App = AppModule.default || AppModule.App;
-
-            try {
-              ReactDOMClient.createRoot(document.getElementById("root"))
-                .render(React.createElement(App));
-            } catch (fallbackError) {
-              const node = App();
-              const root = document.getElementById("root");
-              if (node && node.nodeType === 1) root.appendChild(node);
-              else root.innerHTML = "RN shim retornou tipo inesperado.";
-            }
-
-          } catch (e) {
-            document.body.innerHTML =
-              '<pre style="color:red;padding:20px;">' + e + '</pre>';
-            console.error(e);
-          }
-        })();
-      <\/script>
-    </body>
-  </html>`;
-}
-/* ============================================================
-   10) ENGINE PRINCIPAL — renderWithEsbuild
-   ============================================================ */
-
-async function renderWithEsbuild(input, extraFiles = {}) {
-  const iframe = document.getElementById("previewFrame");
-
-  /* ------------------------------------------------------------
-     Montar código completo para heurística
-  ------------------------------------------------------------ */
-  let allCode = input || "";
-  for (const k in extraFiles) allCode += "\n" + extraFiles[k];
-
-  const isRN = shouldUseRNFake(allCode);
-
+/* ------------------------------------------------------------
+   3) Inicialização ESBUILD
+------------------------------------------------------------ */
+async function initEsbuild() {
   try {
-    /* ------------------------------------------------------------
-       Criar VFS final
-    ------------------------------------------------------------ */
-    let vfs = {};
+    if (window.esbuild?.initialize) return window.esbuild;
 
-    if (typeof input === "string" && input.includes("/// file:")) {
-      vfs = parseMultiFile(input);
-    } else if (Object.keys(extraFiles).length > 0) {
-      vfs = { ...extraFiles };
-    } else {
-      vfs = { "App.tsx": input };
-    }
+    await import("https://unpkg.com/esbuild-wasm@0.19.8/esbuild-wasm.min.js");
 
-    /* Normalizar paths */
-    const normalized = {};
-    for (const k in vfs) {
-      normalized[k.replace(/^\/+/, "")] = vfs[k];
-    }
+    await window.esbuild.initialize({
+      wasmURL: "https://unpkg.com/esbuild-wasm@0.19.8/esbuild.wasm",
+      worker: true,
+    });
 
-    /* Incluir RN shim */
-    normalized["react-native-shim.js"] = RN_SHIM;
-
-    /* ------------------------------------------------------------
-       MODO REACT NATIVE FAKE (sem esbuild)
-    ------------------------------------------------------------ */
-    if (isRN) {
-      const entry = normalized["App.tsx"] || Object.values(normalized)[0];
-      const compiled = await babelCompile(entry);
-
-      const blob = new Blob([compiled], { type: "application/javascript" });
-      const url = URL.createObjectURL(blob);
-
-      iframe.srcdoc = htmlForRN(url);
-      return;
-    }
-
-    /* ------------------------------------------------------------
-       MODO WEB — USANDO ESBUILD
-    ------------------------------------------------------------ */
-    const esbuild = await loadEsbuild();
-
-    /* Detectar entry file */
-    const entry =
-      normalized["src/App.tsx"]
-        ? "src/App.tsx"
-        : normalized["App.tsx"]
-        ? "App.tsx"
-        : Object.keys(normalized)[0];
-
-    try {
-      /* Executar ESBuild */
-      const result = await esbuild.build({
-        stdin: {
-          contents: rewriteBareImports(
-            `import App from "vfs:/${entry}"; export default App;`
-          ),
-          loader: "tsx",
-          resolveDir: "/",
-          sourcefile: "entry.tsx",
-        },
-        bundle: true,
-        write: false,
-        format: "esm",
-        plugins: [makePlugin(normalized)],
-        define: {
-          "process.env.NODE_ENV": '"development"',
-        }
-      });
-
-      /* Bundle final */
-      const out = result.outputFiles[0].text;
-      const blob = new Blob([out], { type: "application/javascript" });
-      const url = URL.createObjectURL(blob);
-
-      iframe.srcdoc = htmlForWeb(url);
-      return;
-
-    } catch (buildError) {
-      /* ESBuild falhou → fallback para Babel */
-      console.warn("[TSX PRO] ESBuild falhou, usando Babel:", buildError);
-
-      const entrySrc = normalized[entry];
-      const compiled = await babelCompile(entrySrc);
-      const blob = new Blob([compiled], { type: "application/javascript" });
-      const url = URL.createObjectURL(blob);
-
-      iframe.srcdoc = htmlForWeb(url);
-      return;
-    }
-
-  } catch (fatalError) {
-    iframe.srcdoc =
-      `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(
-        fatalError
-      )}</pre>`;
-    console.error("[TSX PRO] ERRO FATAL:", fatalError);
+    return window.esbuild;
+  } catch (err) {
+    console.warn("[preview] esbuild falhou:", err);
+    return null;
   }
 }
 
 /* ------------------------------------------------------------
-   11) Expor globalmente
+   4) Compilação com esbuild — TSX → ESM JS
 ------------------------------------------------------------ */
+async function compileWithEsbuild(code) {
+  const esb = await initEsbuild();
+  if (!esb) throw new Error("esbuild indisponível (fallback será usado)");
 
-window.renderWithEsbuild = (code, files) =>
-  renderWithEsbuild(code, files);
-/* ============================================================
-   12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
-   ============================================================ */
+  const resolved = resolveBareImports(code);
 
-/*
-O TSX Studio PRO interpreta automaticamente:
-- import data from "./data.json"
-- import logo from "./logo.svg"
-- import icon from "./img.png"
-
-E converte para strings base64 OU texto puro,
-dependendo da extensão.
-*/
-
-async function loadAsset(url, type) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Falha ao carregar asset: " + url);
-
-  if (type === "json") {
-    return await res.json();
-  }
-
-  if (type === "text" || type === "svg" || type === "md") {
-    return await res.text();
-  }
-
-  if (type === "img") {
-    const blob = await res.blob();
-    return await blobToBase64(blob);
-  }
-
-  return null;
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.readAsDataURL(blob);
+  const result = await esb.transform(resolved, {
+    loader: "tsx",
+    target: "es2022",
+    jsxFactory: "React.createElement",
+    jsxFragment: "React.Fragment",
+    sourcemap: "inline",
   });
+
+  return result.code;
 }
 
-/* 
-Expomos para debug futuro:
-window.TSX_LoadAsset("imagem.png", "img")
-*/
-window.TSX_LoadAsset = loadAsset;
+/* ------------------------------------------------------------
+   5) Fallback — @babel/standalone
+------------------------------------------------------------ */
+async function compileWithBabel(code) {
+  if (!window.Babel) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/@babel/standalone/babel.min.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
 
-/* ============================================================
-   13) LOGS MAIS BONITOS NO PREVIEW (debug opcional)
-   ============================================================ */
+  const resolved = resolveBareImports(code);
 
-(function injectConsoleProxy() {
-  const original = console.log;
+  const out = window.Babel.transform(resolved, {
+    presets: [
+      ["typescript", { allExtensions: true, isTSX: true }],
+      ["react", { runtime: "automatic" }],
+    ],
+    filename: "App.tsx",
+  });
 
-  console.log = (...args) => {
-    original.apply(console, args);
+  return out.code;
+}
 
-    try {
-      const iframe = document.getElementById("previewFrame");
-      if (!iframe) return;
+/* ------------------------------------------------------------
+   6) Compilador final
+------------------------------------------------------------ */
+async function compileTSX(code) {
+  try {
+    return await compileWithEsbuild(code);
+  } catch (err) {
+    console.warn("[preview] esbuild falhou, Babel ativado", err);
+    return await compileWithBabel(code);
+  }
+}
 
-      const win = iframe.contentWindow;
-      if (!win) return;
+/* ------------------------------------------------------------
+   7) Criar blob ESM
+------------------------------------------------------------ */
+function createModuleBlobUrl(compiledCode) {
+  const wrapped = `
+${compiledCode}
+export default (typeof exports !== 'undefined' && exports.default)
+  || (typeof module !== 'undefined' && module.exports?.default)
+  || (window?.App)
+  || undefined;
+  `;
 
-      if (!win.__TSX_CONSOLE_LOG__) return;
-      win.__TSX_CONSOLE_LOG__(args.map(String).join(" "));
-    } catch (_) {}
-  };
-})();
+  const blob = new Blob([wrapped], { type: "text/javascript" });
+  return URL.createObjectURL(blob);
+}
 
-/* ============================================================
-   14) SUPPORT: Atualizar preview após ZIP
-   ============================================================ */
+/* ------------------------------------------------------------
+   8) Criar iframe.srcdoc
+------------------------------------------------------------ */
+function createPreviewSrcdoc(moduleUrl) {
+  return `<!doctype html>
+<html>
+<body style="margin:0;padding:0">
+<div id="root"></div>
 
-window.TSX_RefreshPreview = function () {
-  const code = window.editor ? window.editor.getValue() : "";
-  if (!code) return;
+<script type="module">
+  window.addEventListener('error', e => {
+    parent.postMessage({type:"preview-error", message:e.message, stack:e.error?.stack}, "*");
+  });
 
-  renderWithEsbuild(code, window.TSX_VFS || {});
+  window.addEventListener('unhandledrejection', e => {
+    parent.postMessage({type:"preview-error", message:String(e.reason)}, "*");
+  });
+
+  const React = await import("https://esm.sh/react@19");
+  const ReactDOM = await import("https://esm.sh/react-dom@19");
+
+  const mod = await import("${moduleUrl}");
+  const App = mod.default;
+
+  if (!App) {
+    parent.postMessage({type:"preview-error", message:"Nenhum App exportado"}, "*");
+  } else {
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+  }
+</script>
+
+</body>
+</html>`;
+}
+
+/* ------------------------------------------------------------
+   9) FUNÇÃO PRINCIPAL — SEM EXPORT (CORRIGIDO)
+------------------------------------------------------------ */
+async function renderWithEsbuild(input) {
+  try {
+    const compiled = await compileTSX(input);
+    const moduleUrl = createModuleBlobUrl(compiled);
+
+    const iframe = document.getElementById("previewFrame");
+    iframe.sandbox = "allow-scripts allow-same-origin allow-modals";
+    iframe.srcdoc = createPreviewSrcdoc(moduleUrl);
+
+    iframe.onload = () => URL.revokeObjectURL(moduleUrl);
+
+  } catch (err) {
+    console.error("[preview] erro:", err);
+    alert("Erro no preview: " + err.message);
+  }
+}
+
+/* ------------------------------------------------------------
+   10) Expor função globalmente (CORRETO)
+------------------------------------------------------------ */
+window.renderWithEsbuild = async (code) => {
+  return await renderWithEsbuild(code);
 };
-/* ============================================================
-   TSX Studio PRO v1.5 - ENGINE FINALIZADA
-   Compatível com:
-   - React Web
-   - React Native Fake
-   - ESBuild + Babel fallback
-   - ZIP + VFS invisível
-   - Multi-file via "/// file:"
-   - Imports npm com version pinning
-   - lucide-react / react-hot-toast / zustand / router
-   - Assets (json/svg/png/md)
-   - Projetos grandes de IA (Claude, Gemini, GPT, DeepSeek)
-   ============================================================ */
-
-console.log("%c[TSX PRO] Engine v1.5 carregada com sucesso!", "color:#4ade80;font-weight:bold;");
