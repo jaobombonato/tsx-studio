@@ -1,18 +1,19 @@
+// Loader oficial do Monaco para RequireJS
+
+window.MonacoEnvironment = {
+  getWorkerUrl: function (_, label) {
+    const path = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
+    if (label === "json") return `${path}/language/json/json.worker.js`;
+    if (label === "css") return `${path}/language/css/css.worker.js`;
+    if (label === "html") return `${path}/language/html/html.worker.js`;
+    if (label === "ts" || label === "typescript")
+      return `${path}/language/typescript/ts.worker.js`;
+    return `${path}/editor/editor.worker.js`;
+  }
+};
+
 require.config({
   paths: {
-    "vs": "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs"
+    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs"
   }
-});
-
-require(["vs/editor/editor.main"], () => {
-  window.editor = monaco.editor.create(
-    document.getElementById("editorContainer"),
-    {
-      value: `export default function App(){ return <h1>Hello!</h1> }`,
-      language: "typescript",
-      theme: "vs-dark",
-      fontSize: 14,
-      minimap: { enabled: false }
-    }
-  );
 });
