@@ -6,11 +6,20 @@
   <title>TSX Studio – Editor PRO</title>
 
   <!-- RequireJS deve vir primeiro -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
-  <script src="/assets/js/monaco-loader.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+<script src="/assets/js/monaco-loader.js"></script>
 
-  <!-- Agora sim, Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- JSZip -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- Sistema de arquivos -->
+<script type="module" src="/assets/js/file-tree.js"></script>
+
+<!-- Engine -->
+<script type="module" src="/assets/js/preview-esbuild.js"></script>
 
   <style>
     body {
@@ -111,15 +120,6 @@
     </div>
   </div>
   
-  <!-- JSZip -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-  <!-- Sistema de arquivos (sidebar) -->
-  <script type="module" src="/assets/js/file-tree.js"></script>
-
-  <!-- Engine PRO v1.5 -->
-  <script type="module" src="/assets/js/preview-esbuild.js"></script>
-
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const run = async () => {
