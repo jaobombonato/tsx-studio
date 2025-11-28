@@ -1,6 +1,3 @@
-/*
-  preview-esbuild.js
-  Motor do TSX Studio — versão corrigida com suporte completo ao React.
 */
 
 const ESBUILD_VERSION = '0.17.19';
