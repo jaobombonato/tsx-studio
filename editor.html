@@ -6,6 +6,7 @@
 <title>TSX Studio – Editor (Engine)</title>
 <link rel="stylesheet" href="/assets/css/base.css"/>
 </head>
+
 <body>
   <div id="app" class="split">
     <div class="left">
@@ -15,36 +16,56 @@
         <button id="sampleBtn">Carregar Exemplo</button>
       </div>
     </div>
+
     <div class="right">
       <div id="previewWrap">
-        <iframe id="previewFrame" sandbox="allow-scripts allow-modals allow-same-origin" title="preview"></iframe>
+        <iframe 
+          id="previewFrame"
+          sandbox="allow-scripts allow-modals allow-same-origin"
+          title="preview">
+        </iframe>
       </div>
     </div>
   </div>
 
-  <!-- RequireJS + Monaco loader -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
-  <script src="/assets/js/monaco-loader.js"></script>
+  <!-- 1) ENGINE FIRST (ES MODULE), with defer -->
+  <script type="module" src="/assets/js/preview-esbuild.js" defer></script>
+
+  <!-- 2) JSZip for ZIP support -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-  <!-- Engine scripts -->
-  <script type="module" src="/assets/js/preview-esbuild.js"></script>
+  <!-- 3) RequireJS + Monaco loader (must come AFTER preview-esbuild.js) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+  <script src="/assets/js/monaco-loader.js"></script>
 
   <script>
   // Run button connects Monaco to the esbuild engine
   document.addEventListener('DOMContentLoaded', ()=>{
-    const run = async ()=>{
+
+    const run = async ()=> {
       const code = window.editor ? window.editor.getValue() : '';
       if(!code){ alert('Editor vazio'); return; }
-      // call esbuild renderer
       await window.renderWithEsbuild(code, {});
     };
+
     document.getElementById('runBtn').onclick = run;
-    document.getElementById('sampleBtn').onclick = ()=>{
-      const sample = `export default function App(){ return <div style={{padding:20,fontFamily:'Arial'}}> <h2>Exemplo TSX</h2><p>TSX Studio Engine funcionando ✔</p></div> }`;
-      if(window.editor) window.editor.setValue(sample);
+
+    document.getElementById('sampleBtn').onclick = ()=> {
+      const sample = `
+        /// file: App.tsx
+        export default function App(){
+          return (
+            <div style={{padding:20,fontFamily:'Arial'}}>
+              <h2>Exemplo TSX</h2>
+              <p>TSX Studio Engine funcionando ✔</p>
+            </div>
+          );
+        }
+      `;
+      if(window.editor) window.editor.setValue(sample.trim());
     };
   });
   </script>
+
 </body>
 </html>
