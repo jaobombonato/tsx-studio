@@ -1,5 +1,5 @@
 /* ============================================================
-   TSX STUDIO ENGINE — v1.4 PRO (COM HEURÍSTICA RN CORRIGIDA)
+   TSX STUDIO ENGINE — v1.4.1 PRO (fix React import in iframe)
    ESBuild-wasm + VFS + ZIP + Resolver + Babel Fallback
    + React Native Fake Runtime (LMarena-style)
    + Heurística RN sólida (sem falso positivo)
@@ -27,25 +27,12 @@ async function loadEsbuild() {
 /* -------------------------------------------
    2) HEURÍSTICA RN — SEM FALSOS POSITIVOS
 ------------------------------------------- */
-/*
-REGRAS CERTAS:
-
-🔵 Ativa RN-fake SOMENTE quando:
-  1. Existe import real de "react-native"
-  2. OU existe <View>, <Text>, <ScrollView>, <FlatList>
-     MAS NÃO existe elementos HTML típicos (<div>, <h1>, <p>, <section>)
-  3. OU existe StyleSheet.create(...) E não existe HTML
-
-🔵 Se existir QUALQUER HTML → É MODO WEB
-*/
 function shouldUseRNFake(allCode) {
   const c = allCode.toLowerCase();
 
-  // Caso 1 — import real:
   if (c.includes('from "react-native"') || c.includes("from 'react-native'"))
     return true;
 
-  // Se contiver HTML → é web
   if (
     /<\s*div\b/i.test(c) ||
     /<\s*h1\b/i.test(c) ||
@@ -55,7 +42,6 @@ function shouldUseRNFake(allCode) {
   )
     return false;
 
-  // Caso 2 — elementos RN
   if (
     /<\s*view\b/i.test(c) ||
     /<\s*text\b/i.test(c) ||
@@ -64,7 +50,6 @@ function shouldUseRNFake(allCode) {
   )
     return true;
 
-  // Caso 3 — StyleSheet
   if (/stylesheet\.create\s*\(/i.test(c)) return true;
 
   return false;
@@ -113,7 +98,6 @@ const RN_SHIM = `
 
 /* -------------------------------------------
    4) REWRITE IMPORTS (esm.sh)
-   NÃO tocar em vfs: / ./ / @/ / react-native
 ------------------------------------------- */
 function rewriteBareImports(code) {
   return code.replace(/from\s+['"]([^'"]+)['"]/g, (m, pkg) => {
@@ -163,8 +147,7 @@ function makePlugin(files = {}) {
       });
 
       build.onResolve({ filter: /^[^./].*/ }, args => {
-        if (args.path.startsWith('vfs:'))
-          return { path: args.path, namespace: "vfs" };
+        if (args.path.startsWith('vfs:')) return { path: args.path, namespace: "vfs" };
         return { path: `https://esm.sh/${args.path}`, namespace: "http" };
       });
 
@@ -228,7 +211,7 @@ function parseMultiFile(text) {
 }
 
 /* -------------------------------------------
-   8) HTML WEB
+   8) HTML WEB (robusto: carrega React & ReactDOM e expõe global)
 ------------------------------------------- */
 function htmlForWeb(bundleUrl) {
   return `
@@ -240,26 +223,36 @@ function htmlForWeb(bundleUrl) {
     <body style="margin:0">
       <div id="root"></div>
       <script type="module">
-        try {
-          const reactMod = await import("https://esm.sh/react@18.2.0");
-          const React = reactMod.default || reactMod;
-          const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
-          const ReactDOMClient = domMod.default || domMod;
-          const App = (await import("${bundleUrl}")).default;
-          ReactDOMClient.createRoot(document.getElementById("root")).render(
-            React.createElement(App)
-          );
-        } catch (err) {
-          document.body.innerHTML = '<pre style="color:red;padding:20px;">' + err + '</pre>';
-          console.error(err);
-        }
+        (async () => {
+          try {
+            // importa React e ReactDOM (versão fixa) e expõe globalmente
+            const reactMod = await import("https://esm.sh/react@18.2.0");
+            const React = reactMod.default || reactMod;
+            const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
+            const ReactDOMClient = domMod.default || domMod;
+
+            // expõe globalmente (alguns bundles esperam window.React)
+            window.React = React;
+            window.ReactDOMClient = ReactDOMClient;
+
+            // importa o bundle do usuário e renderiza
+            const AppModule = await import("${bundleUrl}");
+            const App = AppModule.default || AppModule.App;
+            ReactDOMClient.createRoot(document.getElementById("root")).render(
+              React.createElement(App)
+            );
+          } catch (err) {
+            document.body.innerHTML = '<pre style="color:red;padding:20px;">' + String(err) + '</pre>';
+            console.error(err);
+          }
+        })();
       <\/script>
     </body>
   </html>`;
 }
 
 /* -------------------------------------------
-   9) HTML RN-FAKE
+   9) HTML RN-FAKE (usando React + ReactDOM assim também)
 ------------------------------------------- */
 function htmlForRN(bundleUrl) {
   return `
@@ -270,23 +263,36 @@ function htmlForRN(bundleUrl) {
     <body style="margin:0">
       <div id="root"></div>
       <script type="module">
-        try {
-          const reactMod = await import("https://esm.sh/react@18.2.0");
-          const React = reactMod.default || reactMod;
-          const App = (await import("${bundleUrl}")).default;
-          const root = document.getElementById("root");
-          const element = App();
-          if (React.isValidElement(element)) {
-            root.appendChild(
-              document.createElement("div")
-            ).appendChild(document.createTextNode("React element returned; adjust RN shim if needed."));
-          } else {
-            root.appendChild(element);
+        (async () => {
+          try {
+            const reactMod = await import("https://esm.sh/react@18.2.0");
+            const React = reactMod.default || reactMod;
+            const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
+            const ReactDOMClient = domMod.default || domMod;
+
+            window.React = React;
+            window.ReactDOMClient = ReactDOMClient;
+
+            const AppModule = await import("${bundleUrl}");
+            const App = AppModule.default || AppModule.App;
+
+            // Renderiza o resultado (se for elemento React, renderiza; se for nó DOM, anexa)
+            const rootEl = document.getElementById("root");
+            try {
+              ReactDOMClient.createRoot(rootEl).render(React.createElement(App));
+            } catch (e) {
+              const maybeNode = App();
+              if (maybeNode && maybeNode.nodeType === 1) {
+                rootEl.appendChild(maybeNode);
+              } else {
+                rootEl.innerText = "App retornou tipo inesperado — ver console.";
+              }
+            }
+          } catch (err) {
+            document.body.innerHTML = '<pre style="color:red;padding:20px;">' + String(err) + '</pre>';
+            console.error(err);
           }
-        } catch (err) {
-          document.body.innerHTML = '<pre style="color:red;padding:20px;">' + err + '</pre>';
-          console.error(err);
-        }
+        })();
       <\/script>
     </body>
   </html>`;
@@ -295,7 +301,6 @@ function htmlForRN(bundleUrl) {
 /* -------------------------------------------
    10) ENGINE PRINCIPAL (COM HEURÍSTICA RN)
 ------------------------------------------- */
-
 export async function renderWithEsbuild(input, files = {}) {
   const iframe = document.getElementById("previewFrame");
 
