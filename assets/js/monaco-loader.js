@@ -1,16 +1,18 @@
-require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.45.0/min/vs' } });
+// Configuração do RequireJS para Monaco
+require.config({
+  paths: {
+    "vs": "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs"
+  }
+});
+
+// Configuração dos workers
 window.MonacoEnvironment = {
-  getWorkerUrl: function(workerId, label) {
-    return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(`self.MonacoEnvironment = { baseUrl: 'https://unpkg.com/monaco-editor@0.45.0/min/' }; importScripts('https://unpkg.com/monaco-editor@0.45.0/min/vs/base/worker/workerMain.js');`);
+  getWorkerUrl: function (_, label) {
+    return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+      self.MonacoEnvironment = {
+        baseUrl: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/"
+      };
+      importScripts("https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js");
+    `)}`;
   }
 };
-
-require(['vs/editor/editor.main'], function() {
-  window.editor = monaco.editor.create(document.getElementById('editorContainer'), {
-    value: 'export default function App(){ return <div style={{padding:20}}> TSX Studio Engine ready </div> }',
-    language: 'typescript',
-    theme: 'vs-dark',
-    automaticLayout: true,
-    minimap: { enabled: false }
-  });
-});
