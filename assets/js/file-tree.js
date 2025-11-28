@@ -1,166 +1,39 @@
-/* ============================================================
-   TSX Studio PRO v1.5 — file-tree.js
-   - Carrega ZIP
-   - Monta VFS
-   - Alimenta sidebar
-   - Abertura de arquivos no Monaco
-   ============================================================ */
+document.addEventListener("DOMContentLoaded", () => {
 
-console.log("%c[TSX PRO] file-tree.js carregado", "color: green");
+  const fileListEl = document.getElementById("fileList");
+  const fileContentEl = document.getElementById("fileContent");
 
-/* ------------------------------------------------------------
-   1) Referências globais
------------------------------------------------------------- */
-window.TSX_VFS = {};         // Virtual File System completo
-window.TSX_FILE_LIST = [];   // Lista linear de arquivos
-window.TSX_ACTIVE_FILE = ""; // Arquivo aberto no editor
-
-const fileListEl = document.getElementById("fileList");
-
-/* ------------------------------------------------------------
-   2) Função: adicionar arquivo ao VFS
------------------------------------------------------------- */
-function addFileToVFS(path, content) {
-  const clean = path.replace(/^\/+/, "");
-  window.TSX_VFS[clean] = content;
-  window.TSX_FILE_LIST.push(clean);
-}
-
-/* ------------------------------------------------------------
-   3) Função: limpar VFS
------------------------------------------------------------- */
-function resetVFS() {
-  window.TSX_VFS = {};
-  window.TSX_FILE_LIST = [];
-  window.TSX_ACTIVE_FILE = "";
-}
-
-/* ------------------------------------------------------------
-   4) Renderizar lista de arquivos na sidebar
------------------------------------------------------------- */
-function renderFileList() {
-  fileListEl.innerHTML = "";
-
-  window.TSX_FILE_LIST.forEach((file) => {
-    const div = document.createElement("div");
-    div.className = "file-item";
-    div.innerText = file;
-
-    if (file === window.TSX_ACTIVE_FILE) {
-      div.classList.add("file-selected");
-    }
-
-    div.onclick = () => openFileInEditor(file);
-
-    fileListEl.appendChild(div);
-  });
-}
-
-/* ------------------------------------------------------------
-   5) Abrir arquivo no editor Monaco
------------------------------------------------------------- */
-function openFileInEditor(path) {
-  const clean = path.replace(/^\/+/, "");
-  const content = window.TSX_VFS[clean];
-
-  if (!content) {
-    alert("Erro: arquivo não encontrado no VFS:\n" + clean);
+  if (!fileListEl || !fileContentEl) {
+    console.warn("[file-tree] Elementos não encontrados");
     return;
   }
 
-  window.editor.setValue(content);
-  window.TSX_ACTIVE_FILE = clean;
-  renderFileList();
-}
+  let currentFiles = {};
 
-/* ------------------------------------------------------------
-   6) Carregar ZIP do usuário
------------------------------------------------------------- */
-async function handleZipUpload(file) {
-  resetVFS();
+  function renderFileList() {
+    fileListEl.innerHTML = "";
+    for (const name in currentFiles) {
+      const li = document.createElement("li");
+      li.textContent = name;
+      li.onclick = () => fileContentEl.value = currentFiles[name];
+      fileListEl.appendChild(li);
+    }
+  }
 
-  try {
+  window.handleZipUpload = async (file) => {
+    if (!window.JSZip) {
+      alert("JSZip não encontrado");
+      return;
+    }
     const zip = await JSZip.loadAsync(file);
 
-    const entries = Object.keys(zip.files);
-
-    for (const entry of entries) {
-      const zf = zip.files[entry];
-
-      if (!zf.dir) {
-        const text = await zf.async("string");
-        addFileToVFS(entry, text);
-      }
+    currentFiles = {};
+    for (const filename of Object.keys(zip.files)) {
+      const data = await zip.file(filename).async("string");
+      currentFiles[filename] = data;
     }
 
-    // Auto-seleção de arquivo principal
-    const possibleEntries = [
-      "src/App.tsx",
-      "src/main.tsx",
-      "main.tsx",
-      "App.tsx",
-      "index.tsx"
-    ];
-
-    let entryFile = "App.tsx";
-
-    for (const p of possibleEntries) {
-      if (window.TSX_VFS[p]) {
-        entryFile = p;
-        break;
-      }
-    }
-
-    window.TSX_ACTIVE_FILE = entryFile;
-
-    console.log("[TSX PRO] VFS carregado:", window.TSX_VFS);
-
-    // Abrir no Monaco
-    openFileInEditor(entryFile);
-
-    // Atualizar sidebar
     renderFileList();
-
-    alert("ZIP carregado com sucesso!");
-
-  } catch (err) {
-    console.error("Erro ao carregar ZIP:", err);
-    alert("Erro ao carregar ZIP:\n" + err);
-  }
-}
-
-/* ------------------------------------------------------------
-   7) Configurar botão "Importar ZIP"
------------------------------------------------------------- */
-document.getElementById("importZipBtn").onclick = () => {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".zip";
-
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (file) handleZipUpload(file);
   };
 
-  input.click();
-};
-
-/* ------------------------------------------------------------
-   8) Exportar funções globalmente
------------------------------------------------------------- */
-window.TSX_FileTree = {
-  renderFileList,
-  openFileInEditor,
-  handleZipUpload,
-};
-/* ============================================================
-   9) Auto-render da sidebar quando ela abre
------------------------------------------------------------- */
-
-document.getElementById("showFilesBtn").addEventListener("click", () => {
-  renderFileList();
 });
-
-/* ============================================================
-   TSX Studio PRO v1.5 — file-tree.js FINAL
-============================================================ */
