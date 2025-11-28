@@ -6,7 +6,7 @@ window.MonacoEnvironment = {
   getWorker: function (_, label) {
     let url = "";
 
-    const base = "/monaco/min/vs";
+    const base = "/js/monaco/min/vs";
 
     if (label === "json") url = `${base}/language/json/json.worker.js`;
     else if (label === "css") url = `${base}/language/css/css.worker.js`;
