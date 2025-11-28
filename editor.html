@@ -1,38 +1,49 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8" />
-    <title>TSX Studio – Editor</title>
-    <link rel="stylesheet" href="/assets/css/base.css" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TSX Studio – Editor (Engine)</title>
+<link rel="stylesheet" href="/assets/css/base.css"/>
 </head>
-
 <body>
-
-    <div id="app">
-        <!-- Editor -->
-        <div id="editorContainer"></div>
-
-        <!-- Preview -->
-        <div id="previewContainer">
-            <iframe id="previewFrame" sandbox="allow-scripts"></iframe>
-        </div>
+  <div id="app" class="split">
+    <div class="left">
+      <div id="editorContainer" class="editor">Carregando editor...</div>
+      <div class="controls">
+        <button id="runBtn">Rodar (bundle com esbuild)</button>
+        <button id="sampleBtn">Carregar Exemplo</button>
+      </div>
     </div>
-
-    <!-- Botões -->
-    <div id="controls">
-        <button id="runBtn">Rodar</button>
+    <div class="right">
+      <div id="previewWrap">
+        <iframe id="previewFrame" sandbox="allow-scripts allow-modals" title="preview"></iframe>
+      </div>
     </div>
+  </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
-<script src="/assets/js/monaco-loader.js"></script>
-<script src="/assets/js/preview.js"></script>
+  <!-- RequireJS + Monaco loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+  <script src="/assets/js/monaco-loader.js"></script>
 
-<script>
-    document.getElementById("runBtn").onclick = () => {
-        const code = window.editor.getValue();
-        window.renderPreview(code);
+  <!-- Engine scripts -->
+  <script type="module" src="/assets/js/preview-esbuild.js"></script>
+
+  <script>
+  // Run button connects Monaco to the esbuild engine
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const run = async ()=>{
+      const code = window.editor ? window.editor.getValue() : '';
+      if(!code){ alert('Editor vazio'); return; }
+      // call esbuild renderer
+      await window.renderWithEsbuild(code, {});
     };
-</script>
-
+    document.getElementById('runBtn').onclick = run;
+    document.getElementById('sampleBtn').onclick = ()=>{
+      const sample = `export default function App(){ return <div style={{padding:20,fontFamily:'Arial'}}> <h2>Exemplo TSX</h2><p>TSX Studio Engine funcionando ✔</p></div> }`;
+      if(window.editor) window.editor.setValue(sample);
+    };
+  });
+  </script>
 </body>
 </html>
