@@ -1,190 +1,127 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TSX Studio – Editor PRO</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title>TSX Studio PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- RequireJS deve vir primeiro -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
-<script src="/assets/js/monaco-loader.js"></script>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        background: #0f0f0f;
+      }
+      .file-item {
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .file-item:hover {
+        background: #222;
+      }
+      .file-selected {
+        background: #333;
+        font-weight: bold;
+      }
+    </style>
+  </head>
 
-<!-- JSZip -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <body class="text-white">
+    <!-- Layout principal -->
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <div
+        class="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col overflow-hidden"
+      >
+        <div class="p-3 flex gap-2">
+          <button
+            id="importZipBtn"
+            class="bg-zinc-700 px-3 py-1 rounded hover:bg-zinc-600"
+          >
+            Importar ZIP
+          </button>
 
-<!-- Sistema de arquivos -->
-<script type="module" src="/assets/js/file-tree.js"></script>
+          <button
+            id="showFilesBtn"
+            class="bg-zinc-700 px-3 py-1 rounded hover:bg-zinc-600"
+          >
+            Arquivos
+          </button>
+        </div>
 
-<!-- Engine -->
-<script type="module" src="/assets/js/preview-esbuild.js"></script>
+        <div
+          id="fileList"
+          class="flex-1 overflow-auto text-sm border-t border-zinc-800"
+        ></div>
+      </div>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: Inter, Arial, sans-serif;
-    }
+      <!-- Editor + Preview -->
+      <div class="flex-1 flex flex-col">
+        <!-- Barra superior -->
+        <div class="p-3 bg-zinc-900 border-b border-zinc-800 flex gap-3">
+          <button
+            id="runBtn"
+            class="bg-green-600 px-4 py-1 rounded hover:bg-green-500"
+          >
+            ▶ Rodar (ESBuild)
+          </button>
+        </div>
 
-    #editorContainer,
-    #previewFrame {
-      height: calc(100vh - 48px);
-    }
+        <!-- Editor + Preview -->
+        <div class="flex flex-1 overflow-hidden">
+          <!-- Editor -->
+          <div class="flex-1 border-r border-zinc-800">
+            <div id="editorContainer" class="h-full w-full"></div>
+          </div>
 
-    #sidebarOverlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 350px; /* largura final definida */
-      height: 100%;
-      background: white;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-      z-index: 9999;
-      transform: translateX(-100%);
-      transition: transform 0.3s ease;
-      overflow-y: auto;
-      padding: 12px;
-    }
-
-    #sidebarOverlay.open {
-      transform: translateX(0);
-    }
-
-    .file-item {
-      padding: 6px 4px;
-      cursor: pointer;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-
-    .file-item:hover {
-      background: #e5e7eb;
-    }
-
-    .file-selected {
-      background: #d1d5db;
-    }
-  </style>
-</head>
-
-<body class="bg-gray-50">
-
-  <!-- Barra de ferramentas -->
-  <div class="w-full h-12 bg-white border-b flex items-center gap-3 px-4 shadow-sm">
-
-    <button id="runBtn" class="px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
-      Rodar (ESBuild)
-    </button>
-
-    <button id="importZipBtn" class="px-4 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">
-      Importar ZIP
-    </button>
-
-    <button id="sampleBtn" class="px-4 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700">
-      Carregar Exemplo
-    </button>
-
-    <button id="showFilesBtn" class="ml-auto px-4 py-1.5 bg-gray-200 rounded hover:bg-gray-300">
-      Mostrar arquivos
-    </button>
-
-  </div>
-
-  <!-- Overlay lateral (sidebar de arquivos) -->
-  <div id="sidebarOverlay">
-    <div class="flex justify-between items-center mb-3">
-      <h2 class="text-lg font-semibold">Arquivos</h2>
-      <button id="closeSidebarBtn" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded">
-        Fechar
-      </button>
+          <!-- Preview -->
+          <div class="flex-1">
+            <iframe
+              id="previewFrame"
+              sandbox="allow-scripts allow-same-origin allow-modals"
+              class="w-full h-full border-none bg-white"
+            ></iframe>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div id="fileList" class="space-y-1">
-      <!-- preenchido por file-tree.js -->
-    </div>
-  </div>
+    <!-- ============================= -->
+    <!-- ========== SCRIPTS ========== -->
+    <!-- ============================= -->
 
-  <!-- Layout principal -->
-  <div class="flex w-full h-[calc(100vh-48px)]">
+    <!-- RequireJS (necessário p/ Monaco) -->
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"
+    ></script>
 
-    <!-- Editor -->
-    <div id="editorContainer" class="w-1/2 border-r"></div>
+    <!-- Monaco Loader -->
+    <script src="/assets/js/monaco-loader.js"></script>
 
-    <!-- Preview -->
-    <div class="w-1/2 bg-white">
-      <iframe id="previewFrame"
-        sandbox="allow-scripts allow-same-origin allow-modals"
-        class="w-full h-full border-none"></iframe>
-    </div>
-  </div>
-  
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const run = async () => {
-        const code = window.editor ? window.editor.getValue() : "";
-        if (!code) {
-          alert("Editor vazio");
-          return;
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- File system / VFS -->
+    <script src="/assets/js/file-tree.js"></script>
+
+    <!-- Engine do preview (NÃO usar type=module) -->
+    <script src="/assets/js/preview-esbuild.js"></script>
+
+    <!-- Botão Rodar -->
+    <script>
+      const runBtn = document.getElementById("runBtn");
+
+      runBtn.onclick = async () => {
+        try {
+          const code = window.editor.getValue();
+          const vfs = window.TSX_VFS || {};
+
+          await window.renderWithEsbuild(code, vfs);
+        } catch (err) {
+          console.error("Erro ao rodar:", err);
+          alert("Erro ao rodar:\n" + err);
         }
-        await window.renderWithEsbuild(code, window.TSX_VFS || {});
       };
-
-      document.getElementById("runBtn").onclick = run;
-
-      document.getElementById("sampleBtn").onclick = () => {
-        const example = `export default function App(){
-  return <div style={{padding:20,fontFamily:'Arial'}}>
-    <h2>TSX Studio PRO v1.5</h2>
-    <p>Exemplo funcionando ✔️</p>
-  </div>;
-}`;
-        window.editor.setValue(example);
-      };
-
-      document.getElementById("showFilesBtn").onclick = () => {
-        document.getElementById("sidebarOverlay").classList.add("open");
-      };
-
-      document.getElementById("closeSidebarBtn").onclick = () => {
-        document.getElementById("sidebarOverlay").classList.remove("open");
-      };
-    });
-  </script>
-  <!-- Inicialização do editor Monaco -->
-  <script>
-    window.initMonaco = () => {
-      require(["vs/editor/editor.main"], () => {
-        window.editor = monaco.editor.create(
-          document.getElementById("editorContainer"),
-          {
-            value: `/// file: App.tsx
-export default function App(){
-  return <div style={{padding:20,fontFamily:'Arial'}}>
-    <h2>TSX Studio PRO v1.5</h2>
-    <p>Carregado com sucesso!</p>
-  </div>;
-}`,
-            language: "typescript",
-            theme: "vs-light",
-            automaticLayout: true,
-          }
-        );
-      });
-    };
-  </script>
-
-  <script>
-    // Carrega Monaco assim que o require.js estiver OK
-    if (window.require) {
-      window.initMonaco();
-    } else {
-      setTimeout(window.initMonaco, 500);
-    }
-  </script>
-
-</body>
+    </script>
+  </body>
 </html>
-<!-- FIM DO EDITOR.HTML -->
-<!-- TSX Studio PRO v1.5 (UI + Overlay Sidebar 350px + Monaco + Preview) -->
