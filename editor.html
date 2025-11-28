@@ -99,7 +99,33 @@
     <script src="/assets/js/monaco-loader.js"></script>
 
     <!-- JSZip -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Proteção contra libs que chamam define() anonimamente (fix temporário) -->
+<script>
+  // Salva define (se existir) e impede detecção AMD temporariamente
+  (function() {
+    window.__savedDefine = window.define;
+    try {
+      window.define = undefined;
+    } catch(e) {}
+  })();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+  // Restaura define após o script carregar
+  (function() {
+    try {
+      if (typeof window.__savedDefine !== "undefined") {
+        window.define = window.__savedDefine;
+        delete window.__savedDefine;
+      } else {
+        try { delete window.define; } catch(e){ window.define = undefined; }
+      }
+    } catch(e) {}
+  })();
+</script>
+
 
     <!-- File system / VFS -->
     <script src="/assets/js/file-tree.js"></script>
