@@ -1,11 +1,14 @@
+/*
+  preview-esbuild.js
+  Motor do TSX Studio — versão corrigida para expor React globalmente no iframe.
 */
 
 const ESBUILD_VERSION = '0.17.19';
-const ESBUILD_ESM = `https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esm/browser.js`;
-const ESBUILD_WASM = `https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm`;
+const ESBUILD_ESM = https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esm/browser.js;
+const ESBUILD_WASM = https://unpkg.com/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm;
 
 async function loadEsbuild() {
-  if (window.__esbuild) return window.__esbuild;
+  if (window._esbuild) return window._esbuild;
   const module = await import(ESBUILD_ESM);
   await module.initialize({ wasmURL: ESBUILD_WASM });
   window.__esbuild = module;
@@ -14,7 +17,7 @@ async function loadEsbuild() {
 
 function rewriteBareImports(code) {
   return code.replace(/from\s+['"]([^\.\/'"][^'"]*)['"]/g, (m, pkg) => {
-    return `from "https://esm.sh/${pkg}"`;
+    return from "https://esm.sh/${pkg}";
   });
 }
 
@@ -39,7 +42,7 @@ function makePlugin(files = {}) {
       });
 
       build.onResolve({ filter: /^[^\.\/].*/ }, args => ({
-        path: `https://esm.sh/${args.path}`,
+        path: https://esm.sh/${args.path},
         namespace: 'http'
       }));
 
@@ -79,7 +82,7 @@ export async function renderWithEsbuild(entryCode, files = {}) {
       plugins: [makePlugin(files)],
       define: { 'process.env.NODE_ENV': '"development"' },
 
-      // 🔥 FIX FUNDAMENTAL PARA O REACT FUNCIONAR
+      // Fix para JSX -> React.createElement
       jsxFactory: "React.createElement",
       jsxFragment: "React.Fragment"
     });
@@ -90,6 +93,8 @@ export async function renderWithEsbuild(entryCode, files = {}) {
 
     const iframe = document.getElementById('previewFrame');
 
+    // HTML do iframe: primeiro carregamos React e colocamos em window,
+    // só depois importamos o bundle (blob) — assim o bundle encontra React.
     const html = `
       <html>
         <head>
@@ -104,19 +109,28 @@ export async function renderWithEsbuild(entryCode, files = {}) {
           <script type="module">
             (async () => {
               try {
-                // Importa React
-                const React = (await import("https://esm.sh/react")).default;
-                const ReactDOM = (await import("https://esm.sh/react-dom/client")).default;
+                // 1) importa React e ReactDOM e expõe em window dentro do iframe
+                const reactMod = await import("https://esm.sh/react");
+                const reactDomMod = await import("https://esm.sh/react-dom/client");
 
-                // Importa App bundleado
+                // esm.sh pode retornar default ou named; pegue o default quando existir
+                const React = reactMod.default || reactMod;
+                const ReactDOMClient = reactDomMod.default || reactDomMod;
+
+                // Exponha como global no contexto do iframe
+                window.React = React;
+                window.ReactDOMClient = ReactDOMClient;
+
+                // 2) agora importe o bundle (que pode usar React global)
                 const AppModule = await import("${blobUrl}");
                 const App = AppModule.default || AppModule.App;
 
-                ReactDOM.createRoot(document.getElementById("root"))
-                        .render(React.createElement(App));
+                // 3) monte a aplicação usando React importado
+                const root = ReactDOMClient.createRoot(document.getElementById("root"));
+                root.render(React.createElement(App));
               } catch (err) {
                 document.body.innerHTML =
-                  '<pre style="color:red;padding:20px;">' + err + '</pre>';
+                  '<pre style="color:red;padding:20px;">' + String(err) + '</pre>';
                 console.error(err);
               }
             })();
@@ -124,15 +138,14 @@ export async function renderWithEsbuild(entryCode, files = {}) {
         </body>
       </html>
     `;
-
     iframe.srcdoc = html;
 
   } catch (err) {
     const iframe = document.getElementById('previewFrame');
     iframe.srcdoc =
-      '<pre style="color:red;padding:20px;">Build failed: ' + err + '</pre>';
+      '<pre style="color:red;padding:20px;">Build failed: ' + String(err) + '</pre>';
     console.error('esbuild error', err);
   }
 }
 
-window.renderWithEsbuild = (c, f) => renderWithEsbuild(c, f);
+window.renderWithEsbuild = (c, f) => renderWithEsbuild(c, f);
