@@ -43,7 +43,7 @@ require(["vs/editor/editor.main"], function () {
     theme: "vs-dark",
     automaticLayout: true,
     fontSize: 14,
-    minimap: { enabled: false }
+    minimap: { enabled: false },
   });
 
   console.log("%c[TSX PRO] Monaco Editor carregado!", "color: cyan");
