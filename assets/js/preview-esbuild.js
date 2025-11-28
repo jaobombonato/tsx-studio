@@ -386,7 +386,7 @@ function htmlForRN(bundleUrl) {
    10) ENGINE PRINCIPAL — renderWithEsbuild
    ============================================================ */
 
-export async function renderWithEsbuild(input, extraFiles = {}) {
+async function renderWithEsbuild(input, extraFiles = {}) {
   const iframe = document.getElementById("previewFrame");
 
   /* ------------------------------------------------------------
