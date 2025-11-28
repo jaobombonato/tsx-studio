@@ -1,6 +1,3 @@
-/*
-  preview-esbuild.js
-  Motor do TSX Studio — versão corrigida para expor React globalmente no iframe.
 */
 
 const ESBUILD_VERSION = '0.17.19';
