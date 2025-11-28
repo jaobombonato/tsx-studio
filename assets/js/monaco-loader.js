@@ -3,14 +3,21 @@
 ============================================================ */
 
 window.MonacoEnvironment = {
-  getWorkerUrl: function (_, label) {
+  getWorker: function (_, label) {
+    let url = "";
+
     const base = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
-    if (label === "json") return `${base}/language/json/json.worker.js`;
-    if (label === "css") return `${base}/language/css/css.worker.js`;
-    if (label === "html") return `${base}/language/html/html.worker.js`;
-    if (label === "typescript" || label === "ts")
-      return `${base}/language/typescript/ts.worker.js`;
-    return `${base}/editor/editor.worker.js`;
+
+    if (label === "json") url = `${base}/language/json/json.worker.js`;
+    else if (label === "css") url = `${base}/language/css/css.worker.js`;
+    else if (label === "html") url = `${base}/language/html/html.worker.js`;
+    else if (label === "typescript" || label === "ts") url = `${base}/language/typescript/ts.worker.js`;
+    else url = `${base}/editor/editor.worker.js`;
+
+    // Converte o worker remoto em blob local (WORKER FIX)
+    return new Worker(URL.createObjectURL(new Blob([`
+      importScripts("${url}");
+    `], { type: "text/javascript" })));
   }
 };
 
