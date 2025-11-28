@@ -78,17 +78,28 @@ function normalizeAlias(path) {
 }
 
 function rewriteBareImports(code) {
-  // rewrite simple bare imports to esm.sh EXCEPT react-native (handled separately)
-  return code.replace(/from\s+['"]([^\.\/'"][^'"]*)['"]/g, (m, pkg) => {
-    if (pkg === 'react-native' || pkg.startsWith('react-native/')) {
-      // keep as-is; makePlugin will resolve to vfs:react-native-shim
+  return code.replace(/from\s+['"]([^'"]+)['"]/g, (m, pkg) => {
+    // 1) NUNCA toque nos caminhos VFS
+    if (pkg.startsWith("vfs:/")) {
       return `from "${pkg}"`;
     }
-    // leave path starting with @/ to be normalized by plugin as vfs
-    if (pkg.startsWith('@/')) return `from "${pkg}"`;
+    // 2) NUNCA toque em caminhos relativos (./ ou ../)
+    if (pkg.startsWith(".") || pkg.startsWith("/")) {
+      return `from "${pkg}"`;
+    }
+    // 3) React Native → shim interno
+    if (pkg === "react-native" || pkg.startsWith("react-native/")) {
+      return `from "${pkg}"`;
+    }
+    // 4) Suporte para "@/..." — alias do projeto
+    if (pkg.startsWith("@/")) {
+      return `from "${pkg}"`;
+    }
+    // 5) Qualquer outro é um bare import → carregar de esm.sh
     return `from "https://esm.sh/${pkg}"`;
   });
 }
+
 
 // ---------- plugin esbuild: VFS + resolver + http fetch ----------
 function makePlugin(files = {}) {
