@@ -161,7 +161,7 @@ function rewriteBareImports(code) {
 }
 
 /* ============================================================
-   5) PLUGIN VFS + FETCH npm
+   5) PLUGIN VFS + FETCH npm - VERSÃO CORRIGIDA
    ============================================================ */
 
 function makePlugin(files = {}) {
@@ -169,7 +169,7 @@ function makePlugin(files = {}) {
     name: "tsxstudio-vfs-pro",
     setup(build) {
 
-      /* VFS → resolve */
+      /* VFS → resolve (DEVE vir primeiro) */
       build.onResolve({ filter: /^vfs:/ }, args => ({
         path: args.path,
         namespace: "vfs"
@@ -191,14 +191,15 @@ function makePlugin(files = {}) {
           return { contents: files[p], loader };
         }
 
-        return null;
+        return {
+          errors: [{ text: `Arquivo VFS não encontrado: ${p}` }]
+        };
       });
 
-      /* Bare imports → esm.sh */
-      build.onResolve({ filter: /^[^./].*/ }, args => {
-        if (args.path.startsWith("vfs:"))
-          return { path: args.path, namespace: "vfs" };
-
+      /* ✅ CORREÇÃO: Filtro MELHORADO para evitar recursão */
+      build.onResolve({ filter: /^[^./][^v].*/ }, args => {
+        // ✅ Agora ignora paths que começam com "v" (evita "vfs:")
+        
         /* Se tiver versão fixa, aplica */
         if (FIXED_VERSIONS[args.path]) {
           return {
@@ -235,12 +236,6 @@ function makePlugin(files = {}) {
 
     }
   };
-}
-
-function guessLoader(url) {
-  if (url.endsWith(".css")) return "css";
-  if (url.endsWith(".ts") || url.endsWith(".tsx")) return "tsx";
-  return "js";
 }
 
 /* ============================================================
