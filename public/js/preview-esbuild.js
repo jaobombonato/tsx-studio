@@ -696,10 +696,78 @@ window.renderWithEsbuild = async function(code, files) {
     }
 
   } catch (fatalError) {
-    console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
-    iframe.srcdoc = `<pre style="color:red;padding:20px;">ERRO FATAL:\n${String(fatalError)}</pre>`;
-  }
-};
+  console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
+  
+  // FALLBACK ULTRA SIMPLES - mostra o código como texto com React básico
+  const fallbackHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+      <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+      <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+      <style>
+        body { margin: 0; font-family: system-ui, sans-serif; }
+        .loading { padding: 40px; text-align: center; color: #666; }
+        .error { background: #fef2f2; border: 1px solid #fecaca; padding: 20px; margin: 20px; border-radius: 8px; color: #dc2626; }
+      </style>
+    </head>
+    <body>
+      <div id="root">
+        <div class="loading">
+          <h2>🔄 Carregando Sistema Rural...</h2>
+          <p>Se esta mensagem permanecer, há um problema de compilação.</p>
+          <div class="error">
+            <strong>Erro durante a compilação:</strong><br>
+            ${String(fatalError).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+          </div>
+        </div>
+      </div>
+
+      <script type="text/babel">
+        try {
+          ${code}
+          
+          // Tenta renderizar o componente
+          if (typeof SistemaGestaoRural !== 'undefined') {
+            ReactDOM.render(React.createElement(SistemaGestaoRural), document.getElementById('root'));
+          } else {
+            document.getElementById('root').innerHTML = '
+              <div class="error">
+                <h3>Componente não encontrado</h3>
+                <p>O componente SistemaGestaoRural não foi encontrado no código.</p>
+                <details style="margin-top: 10px;">
+                  <summary>Ver código</summary>
+                  <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
+                    ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                  </pre>
+                </details>
+              </div>
+            ';
+          }
+        } catch (renderError) {
+          document.getElementById('root').innerHTML = '
+            <div class="error">
+              <h3>Erro durante a renderização</h3>
+              <p>' + renderError.message + '</p>
+              <details style="margin-top: 10px;">
+                <summary>Ver código fonte</summary>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
+                  ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                </pre>
+              </details>
+            </div>
+          ';
+        }
+      </script>
+    </body>
+    </html>
+  `;
+  
+  iframe.srcdoc = fallbackHTML;
+}
 
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
