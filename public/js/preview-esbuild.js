@@ -55,7 +55,6 @@ async function loadEsbuild() {
   }
 }
 
-
 /* -------------------------------------------
    2) HEURÍSTICA — RN FAKE x WEB
 ------------------------------------------- */
@@ -126,13 +125,13 @@ const RN_SHIM = `
     TouchableOpacity, FlatList, StyleSheet
   };
 `;
+
 /* ============================================================
    4) REWRITE DE IMPORTS (AUTO-FIX, VERSION PINNING)
    ============================================================ */
 
 function rewriteBareImports(code) {
   return code.replace(/from\s+['"]([^'"]+)['"]/g, (match, pkg) => {
-
     /* 1) URLs absolutas ficam como estão */
     if (pkg.startsWith("http")) return `from "${pkg}"`;
 
@@ -168,7 +167,6 @@ function makePlugin(files = {}) {
   return {
     name: "tsxstudio-vfs-pro",
     setup(build) {
-      
       console.log("🔧 [PLUGIN] Inicializando plugin");
 
       /* 1) VFS resolver - DEVE ser o primeiro */
@@ -204,104 +202,107 @@ function makePlugin(files = {}) {
       });
 
       /* 3) Bare imports resolver - EXPRESSÃO CORRIGIDA */
-build.onResolve({ filter: /^[^./][^v/].*/ }, (args) => {
-  console.log("🔧 [PLUGIN] Resolvendo bare import:", args.path);
-  
-  // Verificação extra para garantir que não é vfs
-  if (args.path.startsWith("vfs:")) {
-    return null;
-  }
+      build.onResolve({ filter: /^[^./][^v/].*/ }, (args) => {
+        console.log("🔧 [PLUGIN] Resolvendo bare import:", args.path);
+        
+        // Verificação extra para garantir que não é vfs
+        if (args.path.startsWith("vfs:")) {
+          return null;
+        }
 
-  if (FIXED_VERSIONS[args.path]) {
-    const fixedPath = `https://esm.sh/${FIXED_VERSIONS[args.path]}`;
-    console.log("🔧 [PLUGIN] Usando versão fixa:", fixedPath);
-    return {
-      path: fixedPath,
-      namespace: "http"
-    };
-  }
+        if (FIXED_VERSIONS[args.path]) {
+          const fixedPath = `https://esm.sh/${FIXED_VERSIONS[args.path]}`;
+          console.log("🔧 [PLUGIN] Usando versão fixa:", fixedPath);
+          return {
+            path: fixedPath,
+            namespace: "http"
+          };
+        }
 
-  const esmPath = `https://esm.sh/${args.path}@latest`;
-  console.log("🔧 [PLUGIN] Usando esm.sh:", esmPath);
-  return {
-    path: esmPath,
-    namespace: "http"
-  };
-});
+        const esmPath = `https://esm.sh/${args.path}@latest`;
+        console.log("🔧 [PLUGIN] Usando esm.sh:", esmPath);
+        return {
+          path: esmPath,
+          namespace: "http"
+        };
+      });
 
       /* 4) HTTP loader - VERSÃO GENÉRICA ROBUSTA */
-build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
-  console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
-  
-  if (httpCache.has(args.path)) {
-    return {
-      contents: httpCache.get(args.path),
-      loader: guessLoader(args.path)
-    };
-  }
+      build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
+        console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
+        
+        if (httpCache.has(args.path)) {
+          return {
+            contents: httpCache.get(args.path),
+            loader: guessLoader(args.path)
+          };
+        }
 
-  try {
-    let finalUrl = args.path;
-    let text = '';
-    
-    // CORREÇÃO PARA ESM.SH - usa CDN direto sem parâmetros problemáticos
-    if (finalUrl.includes('esm.sh')) {
-      // Extrai o nome do pacote
-      const packageMatch = finalUrl.match(/esm\.sh\/([^?]+)/);
-      if (packageMatch) {
-        const packageName = packageMatch[1];
-        // Tenta várias estratégias
-        const urlsToTry = [
-          `https://esm.sh/${packageName}?js`,
-          `https://esm.sh/${packageName}`,
-          `https://cdn.esm.sh/${packageName}`,
-          finalUrl // fallback para o original
-        ];
-        
-        for (const url of urlsToTry) {
-          try {
-            console.log("🔧 [PLUGIN] Tentando URL:", url);
-            const res = await fetch(url);
-            if (res.ok) {
-              text = await res.text();
-              finalUrl = url;
-              console.log("🔧 [PLUGIN] Sucesso com:", url);
-              break;
+        try {
+          let finalUrl = args.path;
+          let text = '';
+          
+          // CORREÇÃO PARA ESM.SH - usa CDN direto sem parâmetros problemáticos
+          if (finalUrl.includes('esm.sh')) {
+            // Extrai o nome do pacote
+            const packageMatch = finalUrl.match(/esm\.sh\/([^?]+)/);
+            if (packageMatch) {
+              const packageName = packageMatch[1];
+              // Tenta várias estratégias
+              const urlsToTry = [
+                `https://esm.sh/${packageName}?js`,
+                `https://esm.sh/${packageName}`,
+                `https://cdn.esm.sh/${packageName}`,
+                finalUrl // fallback para o original
+              ];
+              
+              for (const url of urlsToTry) {
+                try {
+                  console.log("🔧 [PLUGIN] Tentando URL:", url);
+                  const res = await fetch(url);
+                  if (res.ok) {
+                    text = await res.text();
+                    finalUrl = url;
+                    console.log("🔧 [PLUGIN] Sucesso com:", url);
+                    break;
+                  }
+                } catch (e) {
+                  continue;
+                }
+              }
+              
+              if (!text) {
+                throw new Error(`Não conseguiu carregar: ${packageName}`);
+              }
+              
+              // Corrige imports problemáticos no código
+              text = text.replace(/from\s+["'](\/\/esm\.sh\/[^"']+)["']/g, 'from "https:$1?js"');
+              text = text.replace(/from\s+["'](\/[^"']+)["']/g, (match, importPath) => {
+                return `from "https://esm.sh${importPath}?js"`;
+              });
             }
-          } catch (e) {
-            continue;
+          } else {
+            // Para outras URLs, fetch normal
+            const res = await fetch(finalUrl);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            text = await res.text();
           }
+          
+          httpCache.set(args.path, text);
+          return { 
+            contents: text, 
+            loader: guessLoader(finalUrl) 
+          };
+        } catch (error) {
+          console.error("🔧 [PLUGIN] Erro HTTP:", error);
+          return {
+            errors: [{ text: `Falha ao carregar: ${args.path}` }]
+          };
         }
-        
-        if (!text) {
-          throw new Error(`Não conseguiu carregar: ${packageName}`);
-        }
-        
-        // Corrige imports problemáticos no código
-        text = text.replace(/from\s+["'](\/\/esm\.sh\/[^"']+)["']/g, 'from "https:$1?js"');
-        text = text.replace(/from\s+["'](\/[^"']+)["']/g, (match, importPath) => {
-          return `from "https://esm.sh${importPath}?js"`;
-        });
-      }
-    } else {
-      // Para outras URLs, fetch normal
-      const res = await fetch(finalUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      text = await res.text();
+      });
     }
-    
-    httpCache.set(args.path, text);
-    return { 
-      contents: text, 
-      loader: guessLoader(finalUrl) 
-    };
-  } catch (error) {
-    console.error("🔧 [PLUGIN] Erro HTTP:", error);
-    return {
-      errors: [{ text: `Falha ao carregar: ${args.path}` }]
-    };
-  }
-});
+  };
+}
 
 function guessLoader(url) {
   if (url.endsWith(".css")) return "css";
@@ -497,6 +498,7 @@ function htmlForRN(bundleUrl) {
     </body>
   </html>`;
 }
+
 /* ============================================================
    10) ENGINE PRINCIPAL — renderWithEsbuild
    ============================================================ */
@@ -611,8 +613,7 @@ async function renderWithEsbuild(input, extraFiles = {}) {
 
   } catch (fatalError) {
     console.error("🔧 [FATAL ERROR]:", fatalError);
-    iframe.srcdoc =
-      `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(fatalError)}</pre>`;
+    iframe.srcdoc = `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(fatalError)}</pre>`;
   }
 }
 
@@ -702,7 +703,7 @@ window.renderWithEsbuild = async function(code, files) {
       iframe.srcdoc = htmlForWeb(url);
     }
 
-    } catch (fatalError) {
+  } catch (fatalError) {
     console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
     
     const fallbackHTML = `
@@ -800,7 +801,7 @@ window.renderWithEsbuild = async function(code, files) {
     iframe.srcdoc = fallbackHTML;
   }
 };
-       
+
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
    ============================================================ */
@@ -882,6 +883,7 @@ window.TSX_RefreshPreview = function () {
 
   renderWithEsbuild(code, window.TSX_VFS || {});
 };
+
 /* ============================================================
    TSX Studio PRO v1.5 - ENGINE FINALIZADA
    Compatível com:
