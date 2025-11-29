@@ -18,14 +18,14 @@ const httpCache = new Map();
 
 /* Fix de versões de pacotes problemáticos */
 const FIXED_VERSIONS = {
-  "react": "react@18.2.0",
-  "react-dom": "react-dom@18.2.0",
-  "lucide-react": "lucide-react@0.368.0",
+  "react": "react@18.3.1",
+  "react-dom": "react-dom@18.3.1", 
+  "lucide-react": "lucide-react@0.368.0?bundle",
   "react-hot-toast": "react-hot-toast@2.4.1",
-  "zustand": "zustand@latest",
-  "dayjs": "dayjs@latest",
-  "clsx": "clsx@latest",
-  "uuid": "uuid@latest"
+  "zustand": "zustand@4.5.2",
+  "dayjs": "dayjs@1.11.10",
+  "clsx": "clsx@2.1.0",
+  "uuid": "uuid@9.0.1"
 };
 
 /* -------------------------------------------
@@ -229,37 +229,66 @@ build.onResolve({ filter: /^[^./][^v/].*/ }, (args) => {
   };
 });
 
-      /* 4) HTTP loader */
-      build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
-        console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
-        
-        if (httpCache.has(args.path)) {
-          console.log("🔧 [PLUGIN] Usando cache HTTP");
-          return {
-            contents: httpCache.get(args.path),
-            loader: guessLoader(args.path)
-          };
-        }
+      /* 4) HTTP loader - VERSÃO CORRIGIDA */
+build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
+  console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
+  
+  if (httpCache.has(args.path)) {
+    console.log("🔧 [PLUGIN] Usando cache HTTP");
+    return {
+      contents: httpCache.get(args.path),
+      loader: guessLoader(args.path)
+    };
+  }
 
-        try {
-          const res = await fetch(args.path);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          
-          const text = await res.text();
-          httpCache.set(args.path, text);
-          
-          console.log("🔧 [PLUGIN] HTTP carregado com sucesso");
-          return { 
-            contents: text, 
-            loader: guessLoader(args.path) 
-          };
-        } catch (error) {
-          console.error("🔧 [PLUGIN] Erro HTTP:", error);
-          return {
-            errors: [{ text: `Falha ao carregar: ${args.path} - ${error.message}` }]
-          };
-        }
+  try {
+    // CORREÇÃO: Remove parâmetros problemáticos do URL
+    let finalUrl = args.path;
+    
+    // Se for do esm.sh, simplifica o URL
+    if (finalUrl.includes('esm.sh')) {
+      // Remove parâmetros de target que causam problemas
+      finalUrl = finalUrl.replace(/\?.*$/, '');
+      // Garante que termina com .js se não tiver extensão
+      if (!finalUrl.match(/\.(js|mjs|css|ts|tsx)$/)) {
+        finalUrl += '?js';
+      }
+    }
+    
+    console.log("🔧 [PLUGIN] URL final:", finalUrl);
+    
+    const res = await fetch(finalUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${finalUrl}`);
+    
+    let text = await res.text();
+    
+    // CORREÇÃO: Remove imports problemáticos do código
+    if (finalUrl.includes('esm.sh')) {
+      text = text.replace(/from\s+["']\/\/esm\.sh\/[^"']+["']/g, (match) => {
+        const cleanImport = match.replace(/\/\/esm\.sh\/([^?&'"]+)[^'"]*/, '"/$1.js"');
+        console.log("🔧 [PLUGIN] Corrigindo import:", match, "→", cleanImport);
+        return cleanImport;
       });
+      
+      // Corrige imports relativos problemáticos
+      text = text.replace(/from\s+["']\/(react[^"']*)["']/g, 'from "/$1.js"');
+      text = text.replace(/from\s+["']\/(lucide-react[^"']*)["']/g, 'from "/lucide-react.js"');
+    }
+    
+    httpCache.set(args.path, text);
+    
+    console.log("🔧 [PLUGIN] HTTP carregado com sucesso");
+    return { 
+      contents: text, 
+      loader: guessLoader(finalUrl) 
+    };
+  } catch (error) {
+    console.error("🔧 [PLUGIN] Erro HTTP:", error);
+    return {
+      errors: [{ text: `Falha ao carregar: ${args.path} - ${error.message}` }]
+    };
+  }
+});
 
     }
   };
@@ -277,41 +306,64 @@ function guessLoader(url) {
 
 async function babelCompile(code) {
   return new Promise((resolve, reject) => {
-    // Verifica se Babel já está carregado
-    if (window.Babel && window.Babel.transform) {
+    // Verifica se Babel já está disponível
+    if (window.Babel && typeof window.Babel.transform === 'function') {
+      console.log("🔧 [BABEL] Usando Babel já carregado");
       try {
         const result = window.Babel.transform(code, {
           presets: [
             ["typescript", { allExtensions: true, isTSX: true }],
             ["react", { runtime: "automatic" }]
-          ]
+          ],
+          filename: 'app.tsx'
         });
         resolve(result.code);
+        return;
       } catch (error) {
         reject(error);
+        return;
       }
-      return;
     }
 
-    // Carrega Babel
+    // Se não tem Babel, carrega
+    console.log("🔧 [BABEL] Carregando Babel...");
+    
+    // Remove scripts antigos do Babel se existirem
+    const oldScripts = document.querySelectorAll('script[src*="babel"]');
+    oldScripts.forEach(script => script.remove());
+    
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
+    script.src = 'https://unpkg.com/@babel/standalone@7.23.6/babel.min.js';
+    
     script.onload = () => {
+      console.log("🔧 [BABEL] Script carregado, aguardando...");
+      // Aguarda um pouco para o Babel inicializar
       setTimeout(() => {
-        try {
-          const result = window.Babel.transform(code, {
-            presets: [
-              ["typescript", { allExtensions: true, isTSX: true }],
-              ["react", { runtime: "automatic" }]
-            ]
-          });
-          resolve(result.code);
-        } catch (error) {
-          reject(error);
+        if (window.Babel && typeof window.Babel.transform === 'function') {
+          console.log("🔧 [BABEL] Babel pronto!");
+          try {
+            const result = window.Babel.transform(code, {
+              presets: [
+                ["typescript", { allExtensions: true, isTSX: true }],
+                ["react", { runtime: "automatic" }]
+              ],
+              filename: 'app.tsx'
+            });
+            resolve(result.code);
+          } catch (error) {
+            reject(error);
+          }
+        } else {
+          reject(new Error('Babel não inicializou corretamente'));
         }
-      }, 100);
+      }, 500);
     };
-    script.onerror = () => reject(new Error('Falha ao carregar Babel'));
+    
+    script.onerror = () => {
+      console.error("🔧 [BABEL] Erro ao carregar script");
+      reject(new Error('Falha ao carregar Babel'));
+    };
+    
     document.head.appendChild(script);
   });
 }
