@@ -1,12 +1,13 @@
 /* ============================================================
-   TSX Studio PRO – Monaco Loader FINAL
+   TSX Studio PRO – Monaco Loader FINAL (CORRIGIDO)
 ============================================================ */
 
 window.MonacoEnvironment = {
   getWorker: function (_, label) {
     let url = "";
 
-    const base = "/monaco/min/vs";
+    // Caminho REAL no servidor Vercel
+    const base = "/js/monaco/min/vs";
 
     if (label === "json") url = `${base}/language/json/json.worker.js`;
     else if (label === "css") url = `${base}/language/css/css.worker.js`;
@@ -14,17 +15,18 @@ window.MonacoEnvironment = {
     else if (label === "typescript" || label === "ts") url = `${base}/language/typescript/ts.worker.js`;
     else url = `${base}/editor/editor.worker.js`;
 
-    // Converte o worker remoto em blob local (WORKER FIX)
+    // Worker fix com blob (necessário no Vercel)
     return new Worker(URL.createObjectURL(new Blob([`
       importScripts("${url}");
     `], { type: "text/javascript" })));
   }
 };
 
+// Corrige carregamento de módulos Monaco via RequireJS
 require.config({
-  waitSeconds: 20, // evita timeout em 3G/WebView/Safari
+  waitSeconds: 20,
   paths: {
-    vs: "/monaco/min/vs"
+    vs: "/js/monaco/min/vs"
   }
 });
 
