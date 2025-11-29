@@ -612,9 +612,7 @@ async function renderWithEsbuild(input, extraFiles = {}) {
   } catch (fatalError) {
     console.error("🔧 [FATAL ERROR]:", fatalError);
     iframe.srcdoc =
-      `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(
-        fatalError
-      )}</pre>`;
+      `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(fatalError)}</pre>`;
   }
 }
 
