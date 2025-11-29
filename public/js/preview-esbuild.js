@@ -319,14 +319,16 @@ function guessLoader(url) {
 }
 
 /* ============================================================
-   6) BABEL FALLBACK — VERSÃO SUPER ROBUSTA
+   6) BABEL FALLBACK — VERSÃO ULTRA-ROBUSTA
    ============================================================ */
 
 async function babelCompile(code) {
   return new Promise((resolve, reject) => {
-    // Verifica se Babel já está disponível
+    console.log("🔧 [BABEL] Iniciando compilação...");
+    
+    // Estratégia 1: Verifica se Babel já está carregado
     if (window.Babel && typeof window.Babel.transform === 'function') {
-      console.log("🔧 [BABEL] Usando Babel já carregado");
+      console.log("🔧 [BABEL] Babel já disponível");
       try {
         const result = window.Babel.transform(code, {
           presets: [
@@ -338,51 +340,91 @@ async function babelCompile(code) {
         resolve(result.code);
         return;
       } catch (error) {
+        console.error("🔧 [BABEL] Erro na compilação:", error);
         reject(error);
         return;
       }
     }
 
-    // Se não tem Babel, carrega
-    console.log("🔧 [BABEL] Carregando Babel...");
+    // Estratégia 2: Carrega Babel com múltiplas tentativas
+    console.log("🔧 [BABEL] Babel não encontrado, carregando...");
     
-    // Remove scripts antigos do Babel se existirem
-    const oldScripts = document.querySelectorAll('script[src*="babel"]');
-    oldScripts.forEach(script => script.remove());
+    let babelLoaded = false;
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@babel/standalone@7.23.6/babel.min.js';
-    
-    script.onload = () => {
-      console.log("🔧 [BABEL] Script carregado, aguardando...");
-      // Aguarda um pouco para o Babel inicializar
-      setTimeout(() => {
-        if (window.Babel && typeof window.Babel.transform === 'function') {
-          console.log("🔧 [BABEL] Babel pronto!");
-          try {
-            const result = window.Babel.transform(code, {
-              presets: [
-                ["typescript", { allExtensions: true, isTSX: true }],
-                ["react", { runtime: "automatic" }]
-              ],
-              filename: 'app.tsx'
-            });
-            resolve(result.code);
-          } catch (error) {
-            reject(error);
+    const tryLoadBabel = () => {
+      attempts++;
+      console.log(`🔧 [BABEL] Tentativa ${attempts} de ${maxAttempts}`);
+      
+      // Remove scripts antigos
+      const oldScripts = document.querySelectorAll('script[src*="babel"]');
+      oldScripts.forEach(script => script.remove());
+      
+      const script = document.createElement('script');
+      
+      // Tenta diferentes CDNs
+      const cdnUrls = [
+        'https://unpkg.com/@babel/standalone@7.23.6/babel.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js',
+        'https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.6/babel.min.js'
+      ];
+      
+      script.src = cdnUrls[attempts - 1] || cdnUrls[0];
+      
+      script.onload = () => {
+        console.log("🔧 [BABEL] Script carregado, verificando...");
+        
+        // Aguarda um pouco e verifica se Babel inicializou
+        const checkBabel = setInterval(() => {
+          if (window.Babel && typeof window.Babel.transform === 'function') {
+            clearInterval(checkBabel);
+            babelLoaded = true;
+            console.log("🔧 [BABEL] Babel inicializado com sucesso!");
+            
+            try {
+              const result = window.Babel.transform(code, {
+                presets: [
+                  ["typescript", { allExtensions: true, isTSX: true }],
+                  ["react", { runtime: "automatic" }]
+                ],
+                filename: 'app.tsx'
+              });
+              resolve(result.code);
+            } catch (compileError) {
+              reject(compileError);
+            }
           }
+        }, 100);
+        
+        // Timeout após 3 segundos
+        setTimeout(() => {
+          clearInterval(checkBabel);
+          if (!babelLoaded) {
+            console.error("🔧 [BABEL] Timeout - Babel não inicializou");
+            if (attempts < maxAttempts) {
+              tryLoadBabel(); // Tenta próxima CDN
+            } else {
+              reject(new Error('Babel não pôde ser carregado após múltiplas tentativas'));
+            }
+          }
+        }, 3000);
+      };
+      
+      script.onerror = () => {
+        console.error(`🔧 [BABEL] Erro ao carregar CDN: ${script.src}`);
+        if (attempts < maxAttempts) {
+          setTimeout(tryLoadBabel, 500); // Tenta próxima CDN
         } else {
-          reject(new Error('Babel não inicializou corretamente'));
+          reject(new Error('Todas as CDNs do Babel falharam'));
         }
-      }, 500);
+      };
+      
+      document.head.appendChild(script);
     };
     
-    script.onerror = () => {
-      console.error("🔧 [BABEL] Erro ao carregar script");
-      reject(new Error('Falha ao carregar Babel'));
-    };
-    
-    document.head.appendChild(script);
+    // Inicia o processo
+    tryLoadBabel();
   });
 }
 
