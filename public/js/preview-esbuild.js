@@ -168,74 +168,107 @@ function makePlugin(files = {}) {
   return {
     name: "tsxstudio-vfs-pro",
     setup(build) {
+      
+      console.log("🔧 [PLUGIN] Inicializando plugin");
 
-      /* VFS → resolve (DEVE vir primeiro) */
-      build.onResolve({ filter: /^vfs:/ }, args => ({
-        path: args.path,
-        namespace: "vfs"
-      }));
-
-      /* VFS → load */
-      build.onLoad({ filter: /.*/, namespace: "vfs" }, args => {
-        const p = args.path.replace(/^vfs:\/*/, "");
-
-        /* shim react-native */
-        if (p === "react-native-shim.js") {
-          return { contents: RN_SHIM, loader: "js" };
-        }
-
-        if (files[p] !== undefined) {
-          const loader = p.endsWith(".tsx") || p.endsWith(".ts") ? "tsx"
-            : p.endsWith(".css") ? "css"
-            : "js";
-          return { contents: files[p], loader };
-        }
-
+      /* 1) VFS resolver - DEVE ser o primeiro */
+      build.onResolve({ filter: /^vfs:/ }, (args) => {
+        console.log("🔧 [PLUGIN] Resolvendo VFS:", args.path);
         return {
-          errors: [{ text: `Arquivo VFS não encontrado: ${p}` }]
+          path: args.path,
+          namespace: "vfs"
         };
       });
 
-      /* ✅ CORREÇÃO: Filtro MELHORADO para evitar recursão */
-      build.onResolve({ filter: /^[^./][^v].*/ }, args => {
-        // ✅ Agora ignora paths que começam com "v" (evita "vfs:")
+      /* 2) VFS loader */
+      build.onLoad({ filter: /.*/, namespace: "vfs" }, (args) => {
+        const path = args.path.replace(/^vfs:\/*/, "");
+        console.log("🔧 [PLUGIN] Carregando VFS:", path);
         
-        /* Se tiver versão fixa, aplica */
+        if (path === "react-native-shim.js") {
+          return { contents: RN_SHIM, loader: "js" };
+        }
+
+        if (files[path] !== undefined) {
+          const loader = path.endsWith(".tsx") || path.endsWith(".ts") ? "tsx"
+            : path.endsWith(".css") ? "css"
+            : "js";
+          console.log("🔧 [PLUGIN] Arquivo encontrado, loader:", loader);
+          return { contents: files[path], loader };
+        }
+
+        console.error("🔧 [PLUGIN] Arquivo VFS não encontrado:", path);
+        return {
+          errors: [{ text: `Arquivo VFS não encontrado: ${path}` }]
+        };
+      });
+
+      /* 3) Bare imports resolver - EXCLUINDO vfs explicitamente */
+      build.onResolve({ filter: /^(?!vfs:)[^./][^/]*$/ }, (args) => {
+        console.log("🔧 [PLUGIN] Resolvendo bare import:", args.path);
+        
+        // Verificação extra para garantir que não é vfs
+        if (args.path.startsWith("vfs:")) {
+          return null; // Deixa para o resolver do vfs
+        }
+
         if (FIXED_VERSIONS[args.path]) {
+          const fixedPath = `https://esm.sh/${FIXED_VERSIONS[args.path]}`;
+          console.log("🔧 [PLUGIN] Usando versão fixa:", fixedPath);
           return {
-            path: `https://esm.sh/${FIXED_VERSIONS[args.path]}`,
+            path: fixedPath,
             namespace: "http"
           };
         }
 
+        const esmPath = `https://esm.sh/${args.path}@latest`;
+        console.log("🔧 [PLUGIN] Usando esm.sh:", esmPath);
         return {
-          path: `https://esm.sh/${args.path}@latest`,
+          path: esmPath,
           namespace: "http"
         };
       });
 
-      /* HTTP loader (esm.sh) */
-      build.onLoad({ filter: /.*/, namespace: "http" }, async args => {
-        const url = args.path;
-
-        if (httpCache.has(url)) {
+      /* 4) HTTP loader */
+      build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
+        console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
+        
+        if (httpCache.has(args.path)) {
+          console.log("🔧 [PLUGIN] Usando cache HTTP");
           return {
-            contents: httpCache.get(url),
-            loader: guessLoader(url)
+            contents: httpCache.get(args.path),
+            loader: guessLoader(args.path)
           };
         }
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Fetch falhou: " + url);
-
-        const text = await res.text();
-        httpCache.set(url, text);
-
-        return { contents: text, loader: guessLoader(url) };
+        try {
+          const res = await fetch(args.path);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          
+          const text = await res.text();
+          httpCache.set(args.path, text);
+          
+          console.log("🔧 [PLUGIN] HTTP carregado com sucesso");
+          return { 
+            contents: text, 
+            loader: guessLoader(args.path) 
+          };
+        } catch (error) {
+          console.error("🔧 [PLUGIN] Erro HTTP:", error);
+          return {
+            errors: [{ text: `Falha ao carregar: ${args.path} - ${error.message}` }]
+          };
+        }
       });
 
     }
   };
+}
+
+function guessLoader(url) {
+  if (url.endsWith(".css")) return "css";
+  if (url.endsWith(".ts") || url.endsWith(".tsx")) return "tsx";
+  return "js";
 }
 
 /* ============================================================
@@ -296,51 +329,46 @@ function parseMultiFile(text) {
 /* ============================================================
    8) HTML PARA WEB — React + ReactDOM + Babel no iframe
    ============================================================ */
+
 function htmlForWeb(bundleUrl) {
   return `
   <html>
     <head>
       <meta charset="utf-8" />
-      <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
     </head>
-
     <body style="margin:0">
       <div id="root"></div>
 
-      <script>
-  // Babel precisa existir ANTES do módulo principal
-  <script src="/js/monaco-loader.js"></script>
-<script src="/js/babel.min.js"></script>
+      <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+      
+      <script type="module">
+        (async () => {
+          try {
+            // React e ReactDOM
+            const reactMod = await import("https://esm.sh/react@18.2.0");
+            const React = reactMod.default || reactMod;
 
-<script type="module">
-  (async () => {
-    try {
-      /* React e ReactDOM (fixado 18.2.0 — manter por enquanto) */
-      const reactMod = await import("https://esm.sh/react@18.2.0");
-      const React = reactMod.default || reactMod;
+            const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
+            const ReactDOMClient = domMod.default || domMod;
 
-      const domMod = await import("https://esm.sh/react-dom@18.2.0/client");
-      const ReactDOMClient = domMod.default || domMod;
+            window.React = React;
+            window.ReactDOMClient = ReactDOMClient;
 
-      window.React = React;
-      window.ReactDOMClient = ReactDOMClient;
+            // Importar bundle
+            const AppModule = await import("${bundleUrl}");
+            const App = AppModule.default || AppModule.App;
 
-      /* Importar bundle */
-      const AppModule = await import("${bundleUrl}");
-      const App = AppModule.default || AppModule.App;
+            // Renderizar
+            ReactDOMClient.createRoot(document.getElementById("root"))
+              .render(React.createElement(App));
 
-      /* Executar */
-      ReactDOMClient.createRoot(document.getElementById("root"))
-        .render(React.createElement(App));
-
-    } catch (e) {
-      document.body.innerHTML =
-        '<pre style="color:red;padding:20px;">' + e + '</pre>';
-      console.error(e);
-    }
-  })();
-<\/script>
+          } catch (e) {
+            document.body.innerHTML = '<pre style="color:red;padding:20px;">' + e + '</pre>';
+            console.error(e);
+          }
+        })();
+      <\/script>
     </body>
   </html>`;
 }
@@ -401,14 +429,14 @@ function htmlForRN(bundleUrl) {
 
 async function renderWithEsbuild(input, extraFiles = {}) {
   const iframe = document.getElementById("previewFrame");
-
-  /* ------------------------------------------------------------
-     Montar código completo para heurística
-  ------------------------------------------------------------ */
+  
+  console.log("🔧 [1] Iniciando renderWithEsbuild");
+  
   let allCode = input || "";
   for (const k in extraFiles) allCode += "\n" + extraFiles[k];
-
   const isRN = shouldUseRNFake(allCode);
+  
+  console.log("🔧 [2] isRN:", isRN);
 
   try {
     /* ------------------------------------------------------------
@@ -433,10 +461,13 @@ async function renderWithEsbuild(input, extraFiles = {}) {
     /* Incluir RN shim */
     normalized["react-native-shim.js"] = RN_SHIM;
 
+    console.log("🔧 [3] VFS criado, arquivos:", Object.keys(normalized));
+
     /* ------------------------------------------------------------
        MODO REACT NATIVE FAKE (sem esbuild)
     ------------------------------------------------------------ */
     if (isRN) {
+      console.log("🔧 [4] Modo RN Fake");
       const entry = normalized["App.tsx"] || Object.values(normalized)[0];
       const compiled = await babelCompile(entry);
 
@@ -450,6 +481,7 @@ async function renderWithEsbuild(input, extraFiles = {}) {
     /* ------------------------------------------------------------
        MODO WEB — USANDO ESBUILD
     ------------------------------------------------------------ */
+    console.log("🔧 [5] Modo Web - Carregando ESBuild");
     const esbuild = await loadEsbuild();
 
     /* Detectar entry file */
@@ -460,8 +492,10 @@ async function renderWithEsbuild(input, extraFiles = {}) {
         ? "App.tsx"
         : Object.keys(normalized)[0];
 
+    console.log("🔧 [6] Entry file:", entry);
+
     try {
-      /* Executar ESBuild */
+      console.log("🔧 [7] Iniciando build ESBuild");
       const result = await esbuild.build({
         stdin: {
           contents: rewriteBareImports(
@@ -480,7 +514,7 @@ async function renderWithEsbuild(input, extraFiles = {}) {
         }
       });
 
-      /* Bundle final */
+      console.log("🔧 [8] Build completo!");
       const out = result.outputFiles[0].text;
       const blob = new Blob([out], { type: "application/javascript" });
       const url = URL.createObjectURL(blob);
@@ -490,7 +524,7 @@ async function renderWithEsbuild(input, extraFiles = {}) {
 
     } catch (buildError) {
       /* ESBuild falhou → fallback para Babel */
-      console.warn("[TSX PRO] ESBuild falhou, usando Babel:", buildError);
+      console.error("🔧 [ERROR] Build error:", buildError);
 
       const entrySrc = normalized[entry];
       const compiled = await babelCompile(entrySrc);
@@ -502,11 +536,11 @@ async function renderWithEsbuild(input, extraFiles = {}) {
     }
 
   } catch (fatalError) {
+    console.error("🔧 [FATAL ERROR]:", fatalError);
     iframe.srcdoc =
       `<pre style="color:red;padding:20px;">ERRO FATAL ENGINE:\n${String(
         fatalError
       )}</pre>`;
-    console.error("[TSX PRO] ERRO FATAL:", fatalError);
   }
 }
 
