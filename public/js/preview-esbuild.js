@@ -203,31 +203,31 @@ function makePlugin(files = {}) {
         };
       });
 
-      /* 3) Bare imports resolver - EXCLUINDO vfs explicitamente */
-      build.onResolve({ filter: /^(?!vfs:)[^./][^/]*$/ }, (args) => {
-        console.log("🔧 [PLUGIN] Resolvendo bare import:", args.path);
-        
-        // Verificação extra para garantir que não é vfs
-        if (args.path.startsWith("vfs:")) {
-          return null; // Deixa para o resolver do vfs
-        }
+      /* 3) Bare imports resolver - EXPRESSÃO CORRIGIDA */
+build.onResolve({ filter: /^[^./][^v/].*/ }, (args) => {
+  console.log("🔧 [PLUGIN] Resolvendo bare import:", args.path);
+  
+  // Verificação extra para garantir que não é vfs
+  if (args.path.startsWith("vfs:")) {
+    return null;
+  }
 
-        if (FIXED_VERSIONS[args.path]) {
-          const fixedPath = `https://esm.sh/${FIXED_VERSIONS[args.path]}`;
-          console.log("🔧 [PLUGIN] Usando versão fixa:", fixedPath);
-          return {
-            path: fixedPath,
-            namespace: "http"
-          };
-        }
+  if (FIXED_VERSIONS[args.path]) {
+    const fixedPath = `https://esm.sh/${FIXED_VERSIONS[args.path]}`;
+    console.log("🔧 [PLUGIN] Usando versão fixa:", fixedPath);
+    return {
+      path: fixedPath,
+      namespace: "http"
+    };
+  }
 
-        const esmPath = `https://esm.sh/${args.path}@latest`;
-        console.log("🔧 [PLUGIN] Usando esm.sh:", esmPath);
-        return {
-          path: esmPath,
-          namespace: "http"
-        };
-      });
+  const esmPath = `https://esm.sh/${args.path}@latest`;
+  console.log("🔧 [PLUGIN] Usando esm.sh:", esmPath);
+  return {
+    path: esmPath,
+    namespace: "http"
+  };
+});
 
       /* 4) HTTP loader */
       build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
@@ -272,37 +272,49 @@ function guessLoader(url) {
 }
 
 /* ============================================================
-   6) BABEL FALLBACK — SEMPRE DISPONÍVEL NO IFRAME
+   6) BABEL FALLBACK — CORRIGIDO E OTIMIZADO
    ============================================================ */
 
-async function ensureBabelInIframe(doc) {
-  return new Promise((resolve) => {
-    const script = doc.createElement("script");
-    script.src = "https://unpkg.com/@babel/standalone/babel.min.js";
-    script.onload = () => resolve(true);
-    doc.head.appendChild(script);
-  });
-}
-
 async function babelCompile(code) {
-  if (!window.Babel) {
-    await new Promise((resolve) => {
-      const s = document.createElement("script");
-      s.src = "https://unpkg.com/@babel/standalone/babel.min.js";
-      s.onload = resolve;
-      document.head.appendChild(s);
+  console.log("🔧 [BABEL] Iniciando compilação...");
+  
+  // Se Babel não estiver disponível, carregue
+  if (typeof window.Babel === 'undefined') {
+    console.log("🔧 [BABEL] Carregando Babel...");
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
     });
+    
+    // Aguarda o Babel inicializar completamente
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  const result = Babel.transform(code, {
-    presets: [
-      ["typescript", { allExtensions: true, isTSX: true }],
-      ["react", { runtime: "automatic" }]
-    ]
-  });
+  if (typeof window.Babel === 'undefined') {
+    throw new Error('Babel não pôde ser carregado');
+  }
 
-  return result.code;
+  console.log("🔧 [BABEL] Compilando código...");
+  try {
+    const result = window.Babel.transform(code, {
+      presets: [
+        ["typescript", { allExtensions: true, isTSX: true }],
+        ["react", { runtime: "automatic" }]
+      ],
+      filename: 'app.tsx'
+    });
+
+    console.log("🔧 [BABEL] Compilação bem-sucedida!");
+    return result.code;
+  } catch (error) {
+    console.error("🔧 [BABEL] Erro na compilação:", error);
+    throw error;
+  }
 }
+
 /* ============================================================
    7) MULTI-FILE PARSER (/// file:)
    ============================================================ */
