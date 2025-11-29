@@ -711,7 +711,7 @@ window.renderWithEsbuild = async function(code, files) {
       iframe.srcdoc = htmlForWeb(url);
     }
 
-  } catch (fatalError) {
+    } catch (fatalError) {
     console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
     
     const fallbackHTML = `
@@ -721,15 +721,14 @@ window.renderWithEsbuild = async function(code, files) {
         <meta charset="utf-8">
         <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
         <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
         <style>
-          body { margin: 0; font-family: system-ui, sans-serif; }
+          body { margin: 0; font-family: system-ui, sans-serif; padding: 20px; }
           .error-panel { 
             background: #fef2f2; 
             border: 1px solid #fecaca; 
             padding: 20px; 
-            margin: 20px; 
+            margin: 20px 0; 
             border-radius: 8px; 
             color: #dc2626;
           }
@@ -737,71 +736,55 @@ window.renderWithEsbuild = async function(code, files) {
             background: #fffbeb; 
             border: 1px solid #fcd34d; 
             padding: 20px; 
-            margin: 20px; 
+            margin: 20px 0; 
             border-radius: 8px; 
             color: #92400e;
+          }
+          .code-panel {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow: auto;
+            max-height: 300px;
           }
         </style>
       </head>
       <body>
-        <div id="root">
-          <div class="warning-panel">
-            <h2>🔄 Compilando seu código...</h2>
-            <p>Isso pode levar alguns segundos.</p>
-          </div>
+        <div class="warning-panel">
+          <h2>⚠️ Erro de Compilação</h2>
+          <p>O código não pôde ser compilado. Detalhes do erro:</p>
+        </div>
+        
+        <div class="error-panel">
+          <h3>${fatalError.name || 'Erro'}</h3>
+          <p><strong>${fatalError.message || 'Erro desconhecido'}</strong></p>
+          
+          <details style="margin-top: 15px;">
+            <summary>Ver stack trace completo</summary>
+            <div class="code-panel">
+${fatalError.stack || 'Nenhum stack trace disponível'}
+            </div>
+          </details>
+          
+          <details style="margin-top: 15px;">
+            <summary>Ver código que causou o erro</summary>
+            <div class="code-panel">
+${code.substring(0, 2000).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            </div>
+          </details>
         </div>
 
-        <script type="text/babel" data-type="module">
-          try {
-            // Seu código vai aqui - o Babel vai compilar automaticamente
-            ${code}
-            
-            // Tenta encontrar o componente padrão para renderizar
-            let AppComponent = null;
-            
-            // Procura por export default
-            if (typeof App !== 'undefined') {
-              AppComponent = App;
-            } else if (typeof DefaultApp !== 'undefined') {
-              AppComponent = DefaultApp;
-            } else {
-              // Tenta encontrar qualquer componente exportado
-              const globalKeys = Object.keys(window);
-              for (const key of globalKeys) {
-                if (key[0] === key[0].toUpperCase() && typeof window[key] === 'function') {
-                  AppComponent = window[key];
-                  break;
-                }
-              }
-            }
-            
-            if (AppComponent) {
-              ReactDOM.render(React.createElement(AppComponent), document.getElementById('root'));
-            } else {
-              document.getElementById('root').innerHTML = '
-                <div class="error-panel">
-                  <h3>⚠️ Componente não encontrado</h3>
-                  <p>Certifique-se de que seu código exporta um componente React padrão.</p>
-                  <p><strong>Dica:</strong> Use <code>export default function App()</code> ou <code>export default App</code></p>
-                </div>
-              ';
-            }
-            
-          } catch (compileError) {
-            document.getElementById('root').innerHTML = '
-              <div class="error-panel">
-                <h3>❌ Erro de compilação</h3>
-                <p><strong>' + compileError.message + '</strong></p>
-                <details style="margin-top: 15px;">
-                  <summary>Ver detalhes do erro</summary>
-                  <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
-' + compileError.stack + '
-                  </pre>
-                </details>
-              </div>
-            ';
-          }
-        </script>
+        <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px;">
+          <h4>💡 Soluções possíveis:</h4>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Verifique se todos os imports estão corretos</li>
+            <li>Certifique-se de usar <code>export default</code> no componente principal</li>
+            <li>Teste com um código mais simples primeiro</li>
+          </ul>
+        </div>
       </body>
       </html>
     `;
