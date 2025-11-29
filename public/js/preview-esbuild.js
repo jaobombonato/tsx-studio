@@ -545,11 +545,19 @@ async function renderWithEsbuild(input, extraFiles = {}) {
 }
 
 /* ------------------------------------------------------------
-   11) Expor globalmente
+   11) Expor globalmente - VERSÃO MAIS SEGURA
 ------------------------------------------------------------ */
 
-window.renderWithEsbuild = (code, files) =>
-  renderWithEsbuild(code, files);
+window.renderWithEsbuild = async function(code, files) {
+  console.log("🔧 [GLOBAL] Chamada global recebida");
+  try {
+    return await renderWithEsbuild(code, files);
+  } catch (error) {
+    console.error("🔧 [GLOBAL] Erro na execução:", error);
+    throw error;
+  }
+};
+
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
    ============================================================ */
