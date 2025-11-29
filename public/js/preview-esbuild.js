@@ -753,7 +753,7 @@ window.renderWithEsbuild = async function(code, files) {
       iframe.srcdoc = htmlForWeb(url);
     }
 
-        } catch (fatalError) {
+          } catch (fatalError) {
     console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
     
     const fallbackHTML = `
@@ -763,55 +763,33 @@ window.renderWithEsbuild = async function(code, files) {
         <meta charset="utf-8">
         <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
         <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
       </head>
       <body>
-        <div id="root" style="padding: 20px;">
-          <div style="max-width: 800px; margin: 0 auto;">
-            <!-- Header -->
-            <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center; margin-bottom: 20px;">
-              <h1 style="color: #065f46; margin-bottom: 10px; font-size: 2rem;">🌱 Sistema de Gestão Rural</h1>
-              <p style="color: #374151;">Sistema Low-Code por João Felipe Bombonato</p>
-            </div>
-
-            <!-- Warning -->
-            <div style="background: #fffbeb; border: 1px solid #fcd34d; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-              <h3 style="color: #92400e; margin: 0 0 10px 0;">⚠️ Sistema em Modo de Visualização</h3>
-              <p style="color: #92400e; margin: 0;">Compilação completa temporariamente indisponível.</p>
-            </div>
-
-            <!-- Modules Grid -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
-              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #eff6ff;">
-                <div style="font-size: 2rem; margin-bottom: 10px;">📊</div>
-                <div style="font-weight: 600; color: #1e40af;">Dashboard</div>
-                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Visão Geral</div>
-              </div>
-              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #ecfdf5;">
-                <div style="font-size: 2rem; margin-bottom: 10px;">💧</div>
-                <div style="font-weight: 600; color: #047857;">Pluviométrico</div>
-                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Controle de Chuva</div>
-              </div>
-              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #fef3c7;">
-                <div style="font-size: 2rem; margin-bottom: 10px;">⚡</div>
-                <div style="font-weight: 600; color: #92400e;">Energia</div>
-                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Leituras</div>
-              </div>
-              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #f3e8ff;">
-                <div style="font-size: 2rem; margin-bottom: 10px;">📁</div>
-                <div style="font-weight: 600; color: #7c3aed;">Documentos</div>
-                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Gestão</div>
-              </div>
-            </div>
-
-            <!-- Error Info -->
-            <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 8px;">
-              <p style="color: #dc2626; margin: 0; font-size: 0.9rem;">
-                <strong>Erro técnico:</strong> ${String(fatalError).substring(0, 150)}...
-              </p>
-            </div>
+        <div id="root" style="padding: 20px; min-height: 100vh; background: #f8fafc;">
+          <div style="text-align: center; padding: 40px;">
+            <h1 style="color: #065f46;">🔧 Carregando...</h1>
+            <p>Seu sistema está sendo inicializado</p>
           </div>
         </div>
+
+        <script type="text/babel">
+          try {
+            ${code}
+            ReactDOM.render(React.createElement(SistemaGestaoRural), document.getElementById('root'));
+          } catch (e) {
+            document.getElementById('root').innerHTML = '
+              <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; margin: 40px auto; text-align: center;">
+                <h2 style="color: #dc2626;">❌ Erro ao carregar</h2>
+                <p>' + e.message + '</p>
+                <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px;">
+                  Tentar Novamente
+                </button>
+              </div>
+            ';
+          }
+        </script>
       </body>
       </html>
     `;
