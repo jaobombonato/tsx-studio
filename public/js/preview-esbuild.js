@@ -545,15 +545,96 @@ async function renderWithEsbuild(input, extraFiles = {}) {
 }
 
 /* ------------------------------------------------------------
-   11) Expor globalmente - VERSÃO CORRIGIDA
+   11) Expor globalmente - VERSÃO COMPLETA E SEGURA
 ------------------------------------------------------------ */
 
-// Guarda a função original com nome diferente
-const _internalRender = async (code, files) => {
-  return await renderWithEsbuild(code, files);
-};
+window.renderWithEsbuild = async function(code, files) {
+  console.log("🔧 [GLOBAL] Iniciando renderização");
+  const iframe = document.getElementById("previewFrame");
+  if (!iframe) {
+    console.error("🔧 [GLOBAL] iframe não encontrado!");
+    return;
+  }
 
-window.renderWithEsbuild = _internalRender;
+  try {
+    // Código VFS
+    let allCode = code || "";
+    for (const k in files) allCode += "\n" + files[k];
+    const isRN = shouldUseRNFake(allCode);
+    
+    console.log("🔧 [GLOBAL] Modo:", isRN ? "React Native" : "Web");
+
+    let vfs = {};
+    if (typeof code === "string" && code.includes("/// file:")) {
+      vfs = parseMultiFile(code);
+    } else if (Object.keys(files).length > 0) {
+      vfs = { ...files };
+    } else {
+      vfs = { "App.tsx": code };
+    }
+
+    // Normalizar paths
+    const normalized = {};
+    for (const k in vfs) {
+      normalized[k.replace(/^\/+/, "")] = vfs[k];
+    }
+    normalized["react-native-shim.js"] = RN_SHIM;
+
+    // MODO REACT NATIVE FAKE
+    if (isRN) {
+      console.log("🔧 [GLOBAL] Usando modo React Native Fake");
+      const entry = normalized["App.tsx"] || Object.values(normalized)[0];
+      const compiled = await babelCompile(entry);
+      const blob = new Blob([compiled], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      iframe.srcdoc = htmlForRN(url);
+      return;
+    }
+
+    // MODO WEB COM ESBUILD
+    console.log("🔧 [GLOBAL] Usando modo Web com ESBuild");
+    const esbuild = await loadEsbuild();
+    const entry = normalized["src/App.tsx"] ? "src/App.tsx" : normalized["App.tsx"] ? "App.tsx" : Object.keys(normalized)[0];
+    
+    console.log("🔧 [GLOBAL] Arquivo de entrada:", entry);
+
+    try {
+      const result = await esbuild.build({
+        stdin: {
+          contents: rewriteBareImports(`import App from "vfs:/${entry}"; export default App;`),
+          loader: "tsx",
+          resolveDir: "/",
+          sourcefile: "entry.tsx",
+        },
+        bundle: true,
+        write: false,
+        format: "esm",
+        plugins: [makePlugin(normalized)],
+        define: {
+          "process.env.NODE_ENV": '"development"',
+        }
+      });
+
+      console.log("🔧 [GLOBAL] Build ESBuild concluído!");
+      const out = result.outputFiles[0].text;
+      const blob = new Blob([out], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      iframe.srcdoc = htmlForWeb(url);
+
+    } catch (buildError) {
+      console.warn("🔧 [GLOBAL] ESBuild falhou, usando Babel:", buildError);
+      const entrySrc = normalized[entry];
+      const compiled = await babelCompile(entrySrc);
+      const blob = new Blob([compiled], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      iframe.srcdoc = htmlForWeb(url);
+    }
+
+  } catch (fatalError) {
+    console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
+    iframe.srcdoc = `<pre style="color:red;padding:20px;">ERRO FATAL:\n${String(fatalError)}</pre>`;
+  }
+};
 
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
