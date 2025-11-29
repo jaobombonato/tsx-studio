@@ -704,81 +704,105 @@ window.renderWithEsbuild = async function(code, files) {
       iframe.srcdoc = htmlForWeb(url);
     }
 
-  } catch (fatalError) {
-  console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
-  
-  // FALLBACK ULTRA SIMPLES - mostra o código como texto com React básico
-  const fallbackHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
-      <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
-      <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
-      <style>
-        body { margin: 0; font-family: system-ui, sans-serif; }
-        .loading { padding: 40px; text-align: center; color: #666; }
-        .error { background: #fef2f2; border: 1px solid #fecaca; padding: 20px; margin: 20px; border-radius: 8px; color: #dc2626; }
-      </style>
-    </head>
-    <body>
-      <div id="root">
-        <div class="loading">
-          <h2>🔄 Carregando Sistema Rural...</h2>
-          <p>Se esta mensagem permanecer, há um problema de compilação.</p>
-          <div class="error">
-            <strong>Erro durante a compilação:</strong><br>
-            ${String(fatalError).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+    } catch (fatalError) {
+    console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
+    
+    const fallbackHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+        <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+        <style>
+          body { margin: 0; font-family: system-ui, sans-serif; }
+          .error-panel { 
+            background: #fef2f2; 
+            border: 1px solid #fecaca; 
+            padding: 20px; 
+            margin: 20px; 
+            border-radius: 8px; 
+            color: #dc2626;
+          }
+          .warning-panel { 
+            background: #fffbeb; 
+            border: 1px solid #fcd34d; 
+            padding: 20px; 
+            margin: 20px; 
+            border-radius: 8px; 
+            color: #92400e;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="root">
+          <div class="warning-panel">
+            <h2>🔄 Compilando seu código...</h2>
+            <p>Isso pode levar alguns segundos.</p>
           </div>
         </div>
-      </div>
 
-      <script type="text/babel">
-        try {
-          ${code}
-          
-          // Tenta renderizar o componente
-          if (typeof SistemaGestaoRural !== 'undefined') {
-            ReactDOM.render(React.createElement(SistemaGestaoRural), document.getElementById('root'));
-          } else {
+        <script type="text/babel" data-type="module">
+          try {
+            // Seu código vai aqui - o Babel vai compilar automaticamente
+            ${code}
+            
+            // Tenta encontrar o componente padrão para renderizar
+            let AppComponent = null;
+            
+            // Procura por export default
+            if (typeof App !== 'undefined') {
+              AppComponent = App;
+            } else if (typeof DefaultApp !== 'undefined') {
+              AppComponent = DefaultApp;
+            } else {
+              // Tenta encontrar qualquer componente exportado
+              const globalKeys = Object.keys(window);
+              for (const key of globalKeys) {
+                if (key[0] === key[0].toUpperCase() && typeof window[key] === 'function') {
+                  AppComponent = window[key];
+                  break;
+                }
+              }
+            }
+            
+            if (AppComponent) {
+              ReactDOM.render(React.createElement(AppComponent), document.getElementById('root'));
+            } else {
+              document.getElementById('root').innerHTML = '
+                <div class="error-panel">
+                  <h3>⚠️ Componente não encontrado</h3>
+                  <p>Certifique-se de que seu código exporta um componente React padrão.</p>
+                  <p><strong>Dica:</strong> Use <code>export default function App()</code> ou <code>export default App</code></p>
+                </div>
+              ';
+            }
+            
+          } catch (compileError) {
             document.getElementById('root').innerHTML = '
-              <div class="error">
-                <h3>Componente não encontrado</h3>
-                <p>O componente SistemaGestaoRural não foi encontrado no código.</p>
-                <details style="margin-top: 10px;">
-                  <summary>Ver código</summary>
-                  <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
-                    ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+              <div class="error-panel">
+                <h3>❌ Erro de compilação</h3>
+                <p><strong>' + compileError.message + '</strong></p>
+                <details style="margin-top: 15px;">
+                  <summary>Ver detalhes do erro</summary>
+                  <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
+' + compileError.stack + '
                   </pre>
                 </details>
               </div>
             ';
           }
-        } catch (renderError) {
-          document.getElementById('root').innerHTML = '
-            <div class="error">
-              <h3>Erro durante a renderização</h3>
-              <p>' + renderError.message + '</p>
-              <details style="margin-top: 10px;">
-                <summary>Ver código fonte</summary>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; overflow: auto; font-size: 12px; margin-top: 10px;">
-                  ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-                </pre>
-              </details>
-            </div>
-          ';
-        }
-      </script>
-    </body>
-    </html>
-  `;
-  
-  iframe.srcdoc = fallbackHTML;
-}
+        </script>
+      </body>
+      </html>
+    `;
+    
+    iframe.srcdoc = fallbackHTML;
+  }
 };
-
+       
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
    ============================================================ */
