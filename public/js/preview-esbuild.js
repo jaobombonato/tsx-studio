@@ -763,33 +763,70 @@ window.renderWithEsbuild = async function(code, files) {
         <meta charset="utf-8">
         <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
         <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+        <style>
+          body { margin: 0; font-family: system-ui, sans-serif; padding: 20px; }
+          .error-panel { 
+            background: #fef2f2; 
+            border: 1px solid #fecaca; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            color: #dc2626;
+          }
+          .warning-panel { 
+            background: #fffbeb; 
+            border: 1px solid #fcd34d; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            color: #92400e;
+          }
+          .code-panel {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow: auto;
+            max-height: 300px;
+          }
+        </style>
       </head>
       <body>
-        <div id="root" style="padding: 20px; min-height: 100vh; background: #f8fafc;">
-          <div style="text-align: center; padding: 40px;">
-            <h1 style="color: #065f46;">🔧 Carregando...</h1>
-            <p>Seu sistema está sendo inicializado</p>
-          </div>
+        <div class="warning-panel">
+          <h2>⚠️ Erro de Compilação</h2>
+          <p>O código não pôde ser compilado. Detalhes do erro:</p>
+        </div>
+        
+        <div class="error-panel">
+          <h3>${fatalError.name || 'Erro'}</h3>
+          <p><strong>${fatalError.message || 'Erro desconhecido'}</strong></p>
+          
+          <details style="margin-top: 15px;">
+            <summary>Ver stack trace completo</summary>
+            <div class="code-panel">
+${fatalError.stack || 'Nenhum stack trace disponível'}
+            </div>
+          </details>
+          
+          <details style="margin-top: 15px;">
+            <summary>Ver código que causou o erro</summary>
+            <div class="code-panel">
+${code.substring(0, 2000).replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            </div>
+          </details>
         </div>
 
-        <script type="text/babel">
-          try {
-            ${code}
-            ReactDOM.render(React.createElement(SistemaGestaoRural), document.getElementById('root'));
-          } catch (e) {
-            document.getElementById('root').innerHTML = '
-              <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; margin: 40px auto; text-align: center;">
-                <h2 style="color: #dc2626;">❌ Erro ao carregar</h2>
-                <p>' + e.message + '</p>
-                <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px;">
-                  Tentar Novamente
-                </button>
-              </div>
-            ';
-          }
-        </script>
+        <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px;">
+          <h4>💡 Soluções possíveis:</h4>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Verifique se todos os imports estão corretos</li>
+            <li>Certifique-se de usar <code>export default</code> no componente principal</li>
+            <li>Teste com um código mais simples primeiro</li>
+          </ul>
+        </div>
       </body>
       </html>
     `;
