@@ -753,10 +753,9 @@ window.renderWithEsbuild = async function(code, files) {
       iframe.srcdoc = htmlForWeb(url);
     }
 
-      } catch (fatalError) {
+        } catch (fatalError) {
     console.error("🔧 [GLOBAL] Erro fatal:", fatalError);
     
-    // FALLBACK DIRETO - Sem Babel, apenas React puro
     const fallbackHTML = `
       <!DOCTYPE html>
       <html>
@@ -765,83 +764,54 @@ window.renderWithEsbuild = async function(code, files) {
         <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
         <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
-        <style>
-          body { margin: 0; font-family: system-ui, sans-serif; padding: 20px; background: #f8fafc; }
-          .error-panel { 
-            background: #fef2f2; 
-            border: 1px solid #fecaca; 
-            padding: 20px; 
-            margin: 20px 0; 
-            border-radius: 8px; 
-            color: #dc2626;
-          }
-          .warning-panel { 
-            background: #fffbeb; 
-            border: 1px solid #fcd34d; 
-            padding: 20px; 
-            margin: 20px 0; 
-            border-radius: 8px; 
-            color: #92400e;
-          }
-          .info-panel {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 8px;
-            color: #1e40af;
-          }
-        </style>
       </head>
       <body>
-        <div class="info-panel">
-          <h2>⚡ Modo de Visualização Rápida</h2>
-          <p>Seu código está sendo exibido em modo de compatibilidade.</p>
-        </div>
+        <div id="root" style="padding: 20px;">
+          <div style="max-width: 800px; margin: 0 auto;">
+            <!-- Header -->
+            <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center; margin-bottom: 20px;">
+              <h1 style="color: #065f46; margin-bottom: 10px; font-size: 2rem;">🌱 Sistema de Gestão Rural</h1>
+              <p style="color: #374151;">Sistema Low-Code por João Felipe Bombonato</p>
+            </div>
 
-        <div class="warning-panel">
-          <h3>📋 Detalhes do Erro Original</h3>
-          <p><strong>${fatalError.name || 'Erro'}:</strong> ${fatalError.message || 'Erro desconhecido'}</p>
-        </div>
+            <!-- Warning -->
+            <div style="background: #fffbeb; border: 1px solid #fcd34d; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #92400e; margin: 0 0 10px 0;">⚠️ Sistema em Modo de Visualização</h3>
+              <p style="color: #92400e; margin: 0;">Compilação completa temporariamente indisponível.</p>
+            </div>
 
-        <div id="simple-app" style="margin-top: 30px;">
-          <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center;">
-            <h1 style="color: #065f46; margin-bottom: 10px;">🌱 Sistema de Gestão Rural</h1>
-            <p style="color: #374151; margin-bottom: 20px;">Sistema Low-Code</p>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 30px 0;">
-              <div style="padding: 20px; background: #eff6ff; border-radius: 8px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
+            <!-- Modules Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #eff6ff;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">📊</div>
                 <div style="font-weight: 600; color: #1e40af;">Dashboard</div>
+                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Visão Geral</div>
               </div>
-              <div style="padding: 20px; background: #ecfdf5; border-radius: 8px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">💧</div>
+              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #ecfdf5;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">💧</div>
                 <div style="font-weight: 600; color: #047857;">Pluviométrico</div>
+                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Controle de Chuva</div>
               </div>
-              <div style="padding: 20px; background: #fef3c7; border-radius: 8px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
+              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #fef3c7;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">⚡</div>
                 <div style="font-weight: 600; color: #92400e;">Energia</div>
+                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Leituras</div>
               </div>
-              <div style="padding: 20px; background: #f3e8ff; border-radius: 8px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">📁</div>
+              <div style="padding: 25px; background: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 2px solid #f3e8ff;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">📁</div>
                 <div style="font-weight: 600; color: #7c3aed;">Documentos</div>
+                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 5px;">Gestão</div>
               </div>
             </div>
-            
-            <div class="error-panel">
-              <h4>⚠️ Sistema em Modo Básico</h4>
-              <p>Algumas funcionalidades estão temporariamente indisponíveis devido a problemas de compilação.</p>
-              <p style="font-size: 12px; margin-top: 10px; color: #9ca3af;">
-                Erro técnico: ${String(fatalError).substring(0, 200)}...
+
+            <!-- Error Info -->
+            <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 8px;">
+              <p style="color: #dc2626; margin: 0; font-size: 0.9rem;">
+                <strong>Erro técnico:</strong> ${String(fatalError).substring(0, 150)}...
               </p>
             </div>
           </div>
         </div>
-
-        <script>
-          // Apenas para demonstração - em produção isso seria o código compilado
-          console.log("Modo de fallback ativado - exibindo interface básica");
-        </script>
       </body>
       </html>
     `;
