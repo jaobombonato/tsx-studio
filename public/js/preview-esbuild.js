@@ -227,79 +227,87 @@ function makePlugin(files = {}) {
         };
       });
 
-      /* 4) HTTP loader - VERSÃO GENÉRICA ROBUSTA */
-      build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
-        console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
-        
-        if (httpCache.has(args.path)) {
-          return {
-            contents: httpCache.get(args.path),
-            loader: guessLoader(args.path)
-          };
-        }
+      /* 4) HTTP loader - VERSÃO CORRIGIDA PARA ESM.SH */
+build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
+  console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
+  
+  if (httpCache.has(args.path)) {
+    return {
+      contents: httpCache.get(args.path),
+      loader: guessLoader(args.path)
+    };
+  }
 
+  try {
+    let finalUrl = args.path;
+    let text = '';
+    
+    // CORREÇÃO: Limpa URLs problemáticas do esm.sh
+    if (finalUrl.includes('esm.sh')) {
+      // Remove URLs duplicadas e parâmetros problemáticos
+      const cleanUrl = finalUrl
+        .replace(/https:\/\/esm\.sh\/https:\/\/esm\.sh\//, 'https://esm.sh/')
+        .replace(/\/(es2022|es2015)\//, '/')
+        .replace(/\?[^]*$/, '?js');
+      
+      console.log("🔧 [PLUGIN] URL limpa:", cleanUrl);
+      
+      // Tenta várias estratégias em ordem
+      const urlsToTry = [
+        cleanUrl,
+        cleanUrl.replace('?js', ''),
+        `https://esm.sh/${cleanUrl.split('esm.sh/')[1]?.split('?')[0] || 'react'}?js`,
+        finalUrl // fallback
+      ];
+      
+      for (const url of urlsToTry) {
         try {
-          let finalUrl = args.path;
-          let text = '';
-          
-          // CORREÇÃO PARA ESM.SH - usa CDN direto sem parâmetros problemáticos
-          if (finalUrl.includes('esm.sh')) {
-            // Extrai o nome do pacote
-            const packageMatch = finalUrl.match(/esm\.sh\/([^?]+)/);
-            if (packageMatch) {
-              const packageName = packageMatch[1];
-              // Tenta várias estratégias
-              const urlsToTry = [
-                `https://esm.sh/${packageName}?js`,
-                `https://esm.sh/${packageName}`,
-                `https://cdn.esm.sh/${packageName}`,
-                finalUrl // fallback para o original
-              ];
-              
-              for (const url of urlsToTry) {
-                try {
-                  console.log("🔧 [PLUGIN] Tentando URL:", url);
-                  const res = await fetch(url);
-                  if (res.ok) {
-                    text = await res.text();
-                    finalUrl = url;
-                    console.log("🔧 [PLUGIN] Sucesso com:", url);
-                    break;
-                  }
-                } catch (e) {
-                  continue;
-                }
-              }
-              
-              if (!text) {
-                throw new Error(`Não conseguiu carregar: ${packageName}`);
-              }
-              
-              // Corrige imports problemáticos no código
-              text = text.replace(/from\s+["'](\/\/esm\.sh\/[^"']+)["']/g, 'from "https:$1?js"');
-              text = text.replace(/from\s+["'](\/[^"']+)["']/g, (match, importPath) => {
-                return `from "https://esm.sh${importPath}?js"`;
-              });
-            }
-          } else {
-            // Para outras URLs, fetch normal
-            const res = await fetch(finalUrl);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          console.log("🔧 [PLUGIN] Tentando URL:", url);
+          const res = await fetch(url);
+          if (res.ok) {
             text = await res.text();
+            finalUrl = url;
+            console.log("🔧 [PLUGIN] Sucesso com:", url);
+            break;
           }
-          
-          httpCache.set(args.path, text);
-          return { 
-            contents: text, 
-            loader: guessLoader(finalUrl) 
-          };
-        } catch (error) {
-          console.error("🔧 [PLUGIN] Erro HTTP:", error);
-          return {
-            errors: [{ text: `Falha ao carregar: ${args.path}` }]
-          };
+        } catch (e) {
+          console.log("🔧 [PLUGIN] Falha com:", url, e.message);
+          continue;
         }
-      });
+      }
+      
+      if (!text) {
+        throw new Error(`Não conseguiu carregar: ${args.path}`);
+      }
+      
+      // CORREÇÃO CRÍTICA: Remove imports problemáticos do código
+      text = text
+        // Remove imports com paths quebrados
+        .replace(/from\s+["']\/\/esm\.sh\/[^"']+["']/g, '')
+        .replace(/from\s+["']\/[^"']+["']/g, '')
+        // Corrige imports relativos problemáticos
+        .replace(/export\s*\*\s*from\s+["'][^"']*lucide-react[^"']*["']/g, '// export removido')
+        .replace(/export\s*\*\s*from\s+["'][^"']*react[^"']*["']/g, '// export removido');
+      
+    } else {
+      // Para outras URLs, fetch normal
+      const res = await fetch(finalUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      text = await res.text();
+    }
+    
+    httpCache.set(args.path, text);
+    return { 
+      contents: text, 
+      loader: guessLoader(finalUrl) 
+    };
+  } catch (error) {
+    console.error("🔧 [PLUGIN] Erro HTTP:", error);
+    return {
+      errors: [{ text: `Falha ao carregar: ${args.path} - ${error.message}` }]
+    };
+  }
+});
     }
   };
 }
