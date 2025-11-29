@@ -18,14 +18,14 @@ const httpCache = new Map();
 
 /* Fix de versões de pacotes problemáticos */
 const FIXED_VERSIONS = {
-  "react": "react@18.3.1",
-  "react-dom": "react-dom@18.3.1", 
-  "lucide-react": "lucide-react@0.368.0?bundle",
-  "react-hot-toast": "react-hot-toast@2.4.1",
-  "zustand": "zustand@4.5.2",
-  "dayjs": "dayjs@1.11.10",
-  "clsx": "clsx@2.1.0",
-  "uuid": "uuid@9.0.1"
+  "react": "react@18",
+  "react-dom": "react-dom@18", 
+  "lucide-react": "lucide-react",
+  "react-hot-toast": "react-hot-toast",
+  "zustand": "zustand",
+  "dayjs": "dayjs",
+  "clsx": "clsx",
+  "uuid": "uuid"
 };
 
 /* -------------------------------------------
@@ -229,12 +229,11 @@ build.onResolve({ filter: /^[^./][^v/].*/ }, (args) => {
   };
 });
 
-      /* 4) HTTP loader - VERSÃO CORRIGIDA */
+      /* 4) HTTP loader - VERSÃO GENÉRICA ROBUSTA */
 build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
   console.log("🔧 [PLUGIN] Carregando HTTP:", args.path);
   
   if (httpCache.has(args.path)) {
-    console.log("🔧 [PLUGIN] Usando cache HTTP");
     return {
       contents: httpCache.get(args.path),
       loader: guessLoader(args.path)
@@ -242,42 +241,56 @@ build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
   }
 
   try {
-    // CORREÇÃO: Remove parâmetros problemáticos do URL
     let finalUrl = args.path;
+    let text = '';
     
-    // Se for do esm.sh, simplifica o URL
+    // CORREÇÃO PARA ESM.SH - usa CDN direto sem parâmetros problemáticos
     if (finalUrl.includes('esm.sh')) {
-      // Remove parâmetros de target que causam problemas
-      finalUrl = finalUrl.replace(/\?.*$/, '');
-      // Garante que termina com .js se não tiver extensão
-      if (!finalUrl.match(/\.(js|mjs|css|ts|tsx)$/)) {
-        finalUrl += '?js';
+      // Extrai o nome do pacote
+      const packageMatch = finalUrl.match(/esm\.sh\/([^?]+)/);
+      if (packageMatch) {
+        const packageName = packageMatch[1];
+        // Tenta várias estratégias
+        const urlsToTry = [
+          `https://esm.sh/${packageName}?js`,
+          `https://esm.sh/${packageName}`,
+          `https://cdn.esm.sh/${packageName}`,
+          finalUrl // fallback para o original
+        ];
+        
+        for (const url of urlsToTry) {
+          try {
+            console.log("🔧 [PLUGIN] Tentando URL:", url);
+            const res = await fetch(url);
+            if (res.ok) {
+              text = await res.text();
+              finalUrl = url;
+              console.log("🔧 [PLUGIN] Sucesso com:", url);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!text) {
+          throw new Error(`Não conseguiu carregar: ${packageName}`);
+        }
+        
+        // Corrige imports problemáticos no código
+        text = text.replace(/from\s+["'](\/\/esm\.sh\/[^"']+)["']/g, 'from "https:$1?js"');
+        text = text.replace(/from\s+["'](\/[^"']+)["']/g, (match, importPath) => {
+          return `from "https://esm.sh${importPath}?js"`;
+        });
       }
-    }
-    
-    console.log("🔧 [PLUGIN] URL final:", finalUrl);
-    
-    const res = await fetch(finalUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${finalUrl}`);
-    
-    let text = await res.text();
-    
-    // CORREÇÃO: Remove imports problemáticos do código
-    if (finalUrl.includes('esm.sh')) {
-      text = text.replace(/from\s+["']\/\/esm\.sh\/[^"']+["']/g, (match) => {
-        const cleanImport = match.replace(/\/\/esm\.sh\/([^?&'"]+)[^'"]*/, '"/$1.js"');
-        console.log("🔧 [PLUGIN] Corrigindo import:", match, "→", cleanImport);
-        return cleanImport;
-      });
-      
-      // Corrige imports relativos problemáticos
-      text = text.replace(/from\s+["']\/(react[^"']*)["']/g, 'from "/$1.js"');
-      text = text.replace(/from\s+["']\/(lucide-react[^"']*)["']/g, 'from "/lucide-react.js"');
+    } else {
+      // Para outras URLs, fetch normal
+      const res = await fetch(finalUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      text = await res.text();
     }
     
     httpCache.set(args.path, text);
-    
-    console.log("🔧 [PLUGIN] HTTP carregado com sucesso");
     return { 
       contents: text, 
       loader: guessLoader(finalUrl) 
@@ -285,14 +298,10 @@ build.onLoad({ filter: /.*/, namespace: "http" }, async (args) => {
   } catch (error) {
     console.error("🔧 [PLUGIN] Erro HTTP:", error);
     return {
-      errors: [{ text: `Falha ao carregar: ${args.path} - ${error.message}` }]
+      errors: [{ text: `Falha ao carregar: ${args.path}` }]
     };
   }
 });
-
-    }
-  };
-}
 
 function guessLoader(url) {
   if (url.endsWith(".css")) return "css";
