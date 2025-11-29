@@ -29,16 +29,32 @@ const FIXED_VERSIONS = {
 };
 
 /* -------------------------------------------
-   1) LOAD ESBUILD (singleton)
+   1) Load ESBuild (SAFE SINGLETON) — PATCH FINAL
 ------------------------------------------- */
 
+let __esbuildInstance = null;
 async function loadEsbuild() {
-  if (window.__esbuild) return window.__esbuild;
-  const mod = await import(ESBUILD_ESM);
-  await mod.initialize({ wasmURL: ESBUILD_WASM });
-  window.__esbuild = mod;
-  return mod;
+  try {
+    // Já carregado? retorna imediatamente
+    if (__esbuildInstance) return __esbuildInstance;
+    // Carrega apenas UMA VEZ
+    const mod = await import(ESBUILD_ESM);
+    // Evita reinit loop/reimport loop
+    if (!mod.initialized) {
+      await mod.initialize({
+        wasmURL: ESBUILD_WASM,
+        worker: false
+      });
+      mod.initialized = true;
+    }
+    __esbuildInstance = mod;
+    return mod;
+  } catch (err) {
+    console.error("[TSX PRO] Erro ao carregar ESBuild:", err);
+    throw err;
+  }
 }
+
 
 /* -------------------------------------------
    2) HEURÍSTICA — RN FAKE x WEB
