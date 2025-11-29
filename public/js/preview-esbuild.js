@@ -768,6 +768,7 @@ window.renderWithEsbuild = async function(code, files) {
   
   iframe.srcdoc = fallbackHTML;
 }
+};
 
 /* ============================================================
    12) SUPORTE A ARQUIVOS DE ASSETS (json, svg, png, jpg, md)
