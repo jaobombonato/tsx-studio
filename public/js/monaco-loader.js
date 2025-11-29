@@ -1,32 +1,31 @@
 /* ============================================================
-   TSX Studio PRO – Monaco Loader FINAL (CORRIGIDO)
+   TSX Studio PRO – Monaco Loader FINAL (CDN v0.55.1)
 ============================================================ */
 
 window.MonacoEnvironment = {
   getWorker: function (_, label) {
+    const cdn = "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs";
+
     let url = "";
 
-    // Caminho REAL no servidor Vercel
-    const base = "/js/monaco/min/vs";
+    if (label === "json") url = `${cdn}/language/json/json.worker.js`;
+    else if (label === "css") url = `${cdn}/language/css/css.worker.js`;
+    else if (label === "html") url = `${cdn}/language/html/html.worker.js`;
+    else if (label === "typescript" || label === "ts")
+      url = `${cdn}/language/typescript/ts.worker.js`;
+    else
+      url = `${cdn}/editor/editor.worker.js`;
 
-    if (label === "json") url = `${base}/language/json/json.worker.js`;
-    else if (label === "css") url = `${base}/language/css/css.worker.js`;
-    else if (label === "html") url = `${base}/language/html/html.worker.js`;
-    else if (label === "typescript" || label === "ts") url = `${base}/language/typescript/ts.worker.js`;
-    else url = `${base}/editor/editor.worker.js`;
-
-    // Worker fix com blob (necessário no Vercel)
     return new Worker(URL.createObjectURL(new Blob([`
       importScripts("${url}");
     `], { type: "text/javascript" })));
   }
 };
 
-// Corrige carregamento de módulos Monaco via RequireJS
 require.config({
   waitSeconds: 20,
   paths: {
-    vs: "/js/monaco/min/vs"
+    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs"
   }
 });
 
@@ -48,5 +47,5 @@ require(["vs/editor/editor.main"], function () {
     minimap: { enabled: false },
   });
 
-  console.log("%c[TSX PRO] Monaco Editor carregado!", "color: cyan");
+  console.log("%c[TSX PRO] Monaco Editor carregado via CDN!", "color: cyan");
 });
